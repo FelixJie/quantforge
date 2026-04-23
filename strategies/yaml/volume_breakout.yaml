@@ -1,0 +1,61 @@
+name: volume_breakout
+display_name: 量价突破
+description: |
+  当股价突破近 20 日最高价且伴随放量时买入。
+  放量突破是趋势启动的有效信号，适合强势股和成长板块。
+
+# ── 选股筛选配置（screener 模块使用）────────────────────────
+screener:
+  category: momentum
+  category_color: "#a855f7"
+  icon: zap
+  risk: 中高
+  suitable: 牛市中期、板块轮动、主力推升行情
+  holding_period: 1-4周
+  filters:
+    min_price: 3.0
+    max_pe: 120.0
+    min_pe: 2.0
+    min_change_pct: 0.5
+  factor_weights:
+    momentum: 8
+    liquidity: 4
+    size: 2
+    value: 1
+    pb: 0
+    quality: 0
+    large_cap: 0
+    graham: 0
+    value_composite: 0
+    float_ratio: 2
+  top_n: 25
+
+# ── LLM 信号分析（YAML问股模块使用）──────────────────────────
+entry_conditions:
+  - 收盘价突破近 20 日最高价
+  - 当日成交量 > 近 10 日平均成交量的 1.5 倍
+  - MA5 > MA10 > MA20 多头排列
+  - 价格未偏离 MA20 超过 8%（防追高）
+
+exit_conditions:
+  - 收盘价跌破 MA10
+  - 或持仓盈利超过 20%
+  - 或亏损超过 6%
+
+# ── 回测/实盘执行配置（策略库使用）──────────────────────────
+execution:
+  strategy_class: bollinger_breakout   # 最接近的突破类策略
+  strategy_params:
+    period: 20
+    std_dev: 2.0
+
+parameters:
+  breakout_period: 20
+  volume_ratio: 1.5
+  stop_loss_pct: 0.06
+  take_profit_pct: 0.20
+  max_deviation_ma20: 0.08
+
+risk_notes: |
+  假突破风险较高，建议等待放量确认（当日收盘）后再操作。
+  强势股跳空高开后不追。

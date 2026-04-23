@@ -1,0 +1,52 @@
+name: hammer_candle
+display_name: 锤子线底部反转
+description: |
+  下影线为实体2倍以上、无上影线或极短的锤子线K线形态，出现在下跌末期时反转信号有效。
+
+screener:
+  category: reversal
+  category_color: "#06b6d4"
+  icon: anchor
+  risk: 中
+  suitable: 下跌末期、超跌反弹
+  holding_period: 1-2周
+  filters:
+    min_price: 3.0
+    max_pe: 100.0
+  factor_weights:
+    momentum: 2
+    liquidity: 4
+    value: 3
+    pb: 1
+    quality: 0
+    size: 2
+    large_cap: 0
+    graham: 0
+    value_composite: 0
+    float_ratio: 3
+  top_n: 15
+
+entry_conditions:
+  - 出现锤子线（下影线≥实体2倍，上影线≤实体0.3倍）
+  - 前5日处于下跌趋势
+  - 次日收阳确认反转
+  - 成交量放大
+
+exit_conditions:
+  - 出现上吊线（锤子线的反面，高位出现）
+  - 或盈利超过 10%
+  - 或亏损超过 5%
+
+execution:
+  strategy_class: mean_reversion
+  strategy_params:
+    lookback: 5
+
+parameters:
+  shadow_ratio: 2.0
+  upper_shadow_max: 0.3
+  stop_loss_pct: 0.05
+  take_profit_pct: 0.10
+
+risk_notes: |
+  必须等次日阳线确认，单日锤子线假信号多。需在支撑位附近出现才有效。

@@ -1,0 +1,59 @@
+name: chip_concentration
+display_name: 筹码集中度
+description: |
+  筛选流通筹码高度集中（前10大股东持股比例 > 60%）、
+  散户持股分散程度低的个股，主力控盘能力强，拉升空间更有把握。
+
+screener:
+  category: momentum
+  category_color: "#b45309"
+  icon: users
+  risk: 中高
+  suitable: 主力建仓完成后、个股独立行情阶段
+  holding_period: 2-6周
+  filters:
+    min_price: 3.0
+    max_pe: 150.0
+    min_pe: 3.0
+  factor_weights:
+    float_ratio: 9
+    momentum: 7
+    liquidity: 5
+    quality: 4
+    size: 4
+    value: 2
+    pb: 2
+    large_cap: 0
+    graham: 0
+    value_composite: 1
+  top_n: 20
+
+entry_conditions:
+  - 前十大股东持股合计 > 60%（筹码集中）
+  - 流通市值 < 80 亿（便于主力控盘）
+  - 近 3 个月换手率适中（3%-15%），非过度换手
+  - 股价在近 20 日进行过充分回调（洗盘结束信号）
+  - 成交量由放量变缩量再度放量（经典庄家建仓换手形态）
+
+exit_conditions:
+  - 持股集中度突然大幅下降（主力开始出货）
+  - 换手率急剧放大（> 20%/天），异常拉升后立即出货
+  - 跌破建仓区域下沿
+
+execution:
+  strategy_class: bollinger_breakout
+  strategy_params:
+    period: 20
+    std_dev: 1.5
+
+parameters:
+  top10_holder_pct_min: 60.0
+  float_cap_max: 80.0
+  turnover_rate_range: [3.0, 15.0]
+  stop_loss_pct: 0.07
+  take_profit_pct: 0.20
+
+risk_notes: |
+  筹码集中并非必然拉升，主力也可能选择出货而非拉升。
+  此策略依赖对主力行为的判断，需结合形态、资金流向综合研判。
+  一旦判断错误，止损需果断，筹码集中的股票跌起来也很猛。

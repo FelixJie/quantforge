@@ -1,0 +1,54 @@
+name: convertible_arbitrage
+display_name: 可转债折价套利
+description: |
+  可转债转股价值高于债券价格时存在套利空间，转股套利风险低、收益稳定。
+
+screener:
+  category: multi_factor
+  category_color: "#8b5cf6"
+  icon: refresh-cw
+  risk: 低中
+  suitable: 可转债溢价率低、正股强势期
+  holding_period: 1-4周
+  filters:
+    min_price: 3.0
+    max_pe: 100.0
+  factor_weights:
+    momentum: 3
+    liquidity: 5
+    value: 3
+    pb: 1
+    quality: 2
+    size: 1
+    large_cap: 1
+    graham: 0
+    value_composite: 0
+    float_ratio: 3
+  top_n: 20
+
+entry_conditions:
+  - 可转债转股溢价率 < 5%
+  - 正股价格高于转股价且有上涨趋势
+  - 可转债剩余规模>1亿（流动性保障）
+  - 发行主体信用评级≥AA
+
+exit_conditions:
+  - 转股溢价率回升至15%以上
+  - 或正股出现下跌趋势
+  - 或套利价差收窄至目标位
+  - 或盈利超过 8%
+
+execution:
+  strategy_class: arbitrage
+  strategy_params:
+    arb_type: convertible
+
+parameters:
+  max_premium_rate: 0.05
+  min_remaining_size: 1.0
+  min_credit_rating: "AA"
+  stop_loss_pct: 0.04
+  take_profit_pct: 0.08
+
+risk_notes: |
+  需关注正股强赎条款触发风险，转债被强制赎回时需及时转股或卖出。

@@ -1,0 +1,64 @@
+name: low_pb_growth
+display_name: 低市净成长
+description: |
+  聚焦 PB < 1.5 且净利润增速 > 15% 的低估值成长股。
+  结合基本面改善趋势和技术面突破信号，寻找估值与成长的双击机会。
+
+# ── 选股筛选配置 ────────────────────────────────────────────────
+screener:
+  category: value
+  category_color: "#6366f1"
+  icon: trending-up
+  risk: 中
+  suitable: 价值回归行情、基本面改善期、政策驱动板块轮动
+  holding_period: 1-3个月
+  filters:
+    min_price: 4.0
+    max_pe: 50.0
+    min_pe: 5.0
+    max_pb: 2.0
+  factor_weights:
+    pb: 9
+    value: 7
+    quality: 6
+    momentum: 4
+    large_cap: 2
+    value_composite: 5
+    graham: 3
+    liquidity: 3
+    size: 2
+    float_ratio: 2
+  top_n: 20
+
+# ── LLM 信号分析 ─────────────────────────────────────────────────
+entry_conditions:
+  - PB < 1.5，股价相对净资产低估
+  - 近一年净利润增速 > 15%
+  - ROE > 10%，盈利质量良好
+  - PE(TTM) < 行业均值的 0.8 倍
+  - 近 5 日股价回调，MA20 形成支撑
+
+exit_conditions:
+  - PB 回归至行业均值以上
+  - 净利润增速大幅下滑（低于 5%）
+  - 跌破 MA20 超过 3%
+
+# ── 回测/实盘执行配置 ─────────────────────────────────────────────
+execution:
+  strategy_class: dual_ma
+  strategy_params:
+    fast_period: 10
+    slow_period: 30
+
+parameters:
+  pb_max: 1.5
+  profit_growth_min: 15.0
+  roe_min: 10.0
+  pe_discount_ratio: 0.80
+  stop_loss_pct: 0.08
+  take_profit_pct: 0.25
+
+risk_notes: |
+  低 PB 可能是价值陷阱：若 PB 低因资产减值或业务萎缩，需规避。
+  重点关注净资产质量，排除商誉占净资产超 30% 的标的。
+  建议配合财报季节点（3/4/7/10月）进行标的筛查。

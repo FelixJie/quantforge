@@ -1,0 +1,63 @@
+name: net_net
+display_name: 格雷厄姆净净值
+description: |
+  纯格雷厄姆"Net-Net"策略：股价低于流动资产净值（流动资产-总负债）
+  的 2/3。这意味着即使公司停止经营清算，投资者也能获利。
+  是最深度的价值洼地策略，适合耐心的逆向投资者。
+
+screener:
+  category: value
+  category_color: "#1d4ed8"
+  icon: package
+  risk: 中高
+  suitable: 熊市末期、深度价值行情、市场极度悲观时期
+  holding_period: 3-12个月
+  filters:
+    min_price: 1.5
+    max_pe: 50.0
+    min_pe: 0.0
+    max_pb: 1.0
+  factor_weights:
+    graham: 10
+    pb: 9
+    value: 8
+    value_composite: 6
+    quality: 3
+    liquidity: 4
+    size: 3
+    large_cap: 1
+    momentum: 0
+    float_ratio: 2
+  top_n: 15
+
+entry_conditions:
+  - 流动资产 - 总负债 > 0（净净值为正，有清算价值）
+  - 股价 < 净净值的 2/3（格雷厄姆安全边际标准）
+  - PB < 0.8（股价低于每股净资产的八折）
+  - 近 3 年未出现大额亏损（非持续性亏损企业）
+  - 非金融行业（银行/保险等资产负债结构特殊，不适用此方法）
+
+exit_conditions:
+  - 股价升至净净值以上（价值修复完成）
+  - 公司发布重大资产减值（流动资产质量恶化）
+  - 持有满 1 年强制止损（时间止损）
+
+execution:
+  strategy_class: dual_ma
+  strategy_params:
+    fast_period: 20
+    slow_period: 60
+
+parameters:
+  pb_max: 0.8
+  net_net_discount: 0.67
+  profitable_years: 3
+  exclude_financial: true
+  stop_loss_pct: 0.15
+  take_profit_pct: 0.50
+  max_hold_days: 250
+
+risk_notes: |
+  Net-Net 股票往往是市场遗弃的冷门股，流动性差，需分散投资 10+ 只。
+  部分低PB股是因为经营模式已经落后，价值可能永远无法回归。
+  A股满足净净值条件的股票数量少，需在熊市末期系统性筛查。

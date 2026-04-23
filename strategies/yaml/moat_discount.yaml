@@ -1,0 +1,55 @@
+name: moat_discount
+display_name: 护城河折价买入
+description: |
+  具备强护城河（品牌/专利/网络效应/成本优势）的高质量公司，股价因短期利空跌至历史低估区间。
+
+screener:
+  category: value
+  category_color: "#3b82f6"
+  icon: shield
+  risk: 低中
+  suitable: 优质股超跌、黑天鹅后修复
+  holding_period: 3-12个月
+  filters:
+    min_price: 5.0
+    max_pe: 50.0
+    min_pe: 8.0
+    min_market_cap: 100.0
+  factor_weights:
+    momentum: 1
+    liquidity: 2
+    value: 5
+    pb: 2
+    quality: 8
+    size: 0
+    large_cap: 2
+    graham: 0
+    value_composite: 2
+    float_ratio: 0
+  top_n: 15
+
+entry_conditions:
+  - 护城河评级高（行业龙头地位稳固）
+  - PE低于历史均值1.5个标准差
+  - 近期利空属于短期一次性事件
+  - ROE近5年均>15%
+
+exit_conditions:
+  - 估值修复至历史均值水平
+  - 或护城河遭受实质性侵蚀
+  - 或盈利超过 30%
+  - 或亏损超过 10%
+
+execution:
+  strategy_class: factor_ranking
+  strategy_params:
+    primary_factor: quality_value
+
+parameters:
+  min_roe: 0.15
+  max_pe_std: -1.5
+  stop_loss_pct: 0.10
+  take_profit_pct: 0.30
+
+risk_notes: |
+  需要深度研究判断利空是否为短期扰动，切勿在基本面实质恶化时抄底。

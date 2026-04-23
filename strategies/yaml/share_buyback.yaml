@@ -1,0 +1,53 @@
+name: share_buyback
+display_name: 积极回购护盘
+description: |
+  公司实施大规模股份回购计划（回购金额>总市值1%），彰显管理层对股价低估的判断。
+
+screener:
+  category: multi_factor
+  category_color: "#8b5cf6"
+  icon: rotate-ccw
+  risk: 低中
+  suitable: 熊市回购护盘、价值修复
+  holding_period: 1-3个月
+  filters:
+    min_price: 3.0
+    max_pe: 60.0
+    min_pe: 5.0
+  factor_weights:
+    momentum: 2
+    liquidity: 3
+    value: 5
+    pb: 2
+    quality: 4
+    size: 1
+    large_cap: 2
+    graham: 0
+    value_composite: 0
+    float_ratio: 0
+  top_n: 20
+
+entry_conditions:
+  - 公告股份回购计划
+  - 回购金额>总市值1%
+  - 回购价格上限高于当前市价
+  - 公司自由现金流充裕可支持回购
+
+exit_conditions:
+  - 回购计划完成或终止
+  - 或股价已达回购价格上限
+  - 或盈利超过 15%
+  - 或亏损超过 8%
+
+execution:
+  strategy_class: event_driven
+  strategy_params:
+    event_type: buyback
+
+parameters:
+  min_buyback_ratio: 0.01
+  stop_loss_pct: 0.08
+  take_profit_pct: 0.15
+
+risk_notes: |
+  回购计划可能因市场环境恶化而未能完全执行，需持续跟踪回购进度公告。

@@ -1,0 +1,58 @@
+# QuantForge Default Configuration
+
+system:
+  name: "QuantForge"
+  version: "0.1.0"
+  log_level: "INFO"
+  data_dir: "data"
+
+data:
+  # Primary data source
+  default_feed: "akshare"
+  # Bar storage format
+  storage: "parquet"
+  # Cache settings
+  cache:
+    enabled: true
+    max_memory_mb: 512
+
+market:
+  # Default exchange
+  default_exchange: "SSE"
+  # Trading hours (A-share)
+  trading_hours:
+    morning_open: "09:30"
+    morning_close: "11:30"
+    afternoon_open: "13:00"
+    afternoon_close: "15:00"
+  # Price limits
+  price_limit:
+    main_board: 0.10       # 10%
+    chinext_star: 0.20     # 20% (创业板/科创板)
+
+backtest:
+  # Default initial capital (CNY)
+  initial_capital: 1000000.0
+  # Commission rate
+  commission_rate: 0.0003
+  # Minimum commission (CNY)
+  min_commission: 5.0
+  # Stamp tax (sell only)
+  stamp_tax_rate: 0.001
+  # Slippage (ticks)
+  slippage: 1
+  # T+1 settlement
+  t_plus_1: true
+
+risk:
+  # Max position per stock (% of portfolio). Set high for single-stock strategies.
+  # For multi-stock portfolios, reduce to 0.10-0.20.
+  max_position_pct: 0.95
+  # Max daily drawdown before blocking new buys (%)
+  max_daily_drawdown: 0.05
+  # Max total drawdown before blocking new buys (%)
+  max_total_drawdown: 0.20
+  # Max holdings (number of distinct stocks)
+  max_holdings: 20
+  # Max top-1 concentration (% of portfolio)
+  max_top1_pct: 0.95

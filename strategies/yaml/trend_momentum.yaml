@@ -1,0 +1,66 @@
+name: trend_momentum
+display_name: 趋势动量
+description: |
+  跟踪近 60 日相对强度最高的强势股，要求均线多头排列、
+  成交量稳定放大。适合牛市中后期和热点板块爆发阶段。
+
+# ── 选股筛选配置 ────────────────────────────────────────────────
+screener:
+  category: momentum
+  category_color: "#ef4444"
+  icon: flame
+  risk: 中高
+  suitable: 牛市中后期、板块轮动强势期、热点爆发阶段
+  holding_period: 1-4周
+  filters:
+    min_price: 5.0
+    max_pe: 150.0
+    min_pe: 5.0
+    min_change_pct: 1.0
+  factor_weights:
+    momentum: 10
+    liquidity: 5
+    float_ratio: 4
+    size: 2
+    value: 1
+    pb: 0
+    quality: 2
+    large_cap: 1
+    graham: 0
+    value_composite: 0
+  top_n: 20
+
+# ── LLM 信号分析 ─────────────────────────────────────────────────
+entry_conditions:
+  - 近 60 日涨幅排名市场前 20%（相对强度）
+  - MA5 > MA10 > MA20 > MA60 四线多头排列
+  - 成交量近 5 日均量 > 20 日均量（温和放量）
+  - 股价未偏离 MA20 超过 15%（未严重透支）
+  - 近 3 日无大阴线（趋势稳健）
+
+exit_conditions:
+  - MA5 下穿 MA10
+  - 成交量骤降且股价无法创新高（顶部背离）
+  - 或盈利超过 20% 时高位减仓
+
+# ── 回测/实盘执行配置 ─────────────────────────────────────────────
+execution:
+  strategy_class: bollinger_breakout
+  strategy_params:
+    period: 20
+    std_dev: 1.5
+
+parameters:
+  momentum_period: 60
+  ma_alignment: true          # 要求四线多头排列
+  volume_ratio_min: 1.0       # 近5日/近20日均量比
+  max_deviation_ma20: 0.15
+  stop_loss_pct: 0.07
+  take_profit_pct: 0.20
+  trailing_stop: 0.05         # 动态追踪止损
+
+risk_notes: |
+  强势股追涨风险高：入场前确认整体市场处于上升趋势。
+  追高止损要迅速，一旦均线死叉或成交量骤降立即离场。
+  回调幅度超过 7% 立即止损，不给亏损扩大机会。
+  绝对不在全市场高位（指数 RSI > 75）买入。

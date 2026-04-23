@@ -1,0 +1,62 @@
+name: cash_cow
+display_name: 现金奶牛
+description: |
+  聚焦自由现金流收益率（FCF/市值）> 6% 的高现金流公司。
+  真实的现金流难以造假，是比净利润更可靠的盈利质量指标。
+  适合寻找被低估的稳健经营企业。
+
+screener:
+  category: value
+  category_color: "#15803d"
+  icon: dollar-sign
+  risk: 低中
+  suitable: 任何市场环境、防御性配置、价值回归行情
+  holding_period: 1-6个月
+  filters:
+    min_price: 4.0
+    max_pe: 35.0
+    min_pe: 5.0
+    max_pb: 4.0
+  factor_weights:
+    quality: 10
+    value: 8
+    graham: 6
+    value_composite: 6
+    pb: 4
+    large_cap: 3
+    momentum: 2
+    liquidity: 3
+    size: 1
+    float_ratio: 1
+  top_n: 20
+
+entry_conditions:
+  - 近一年自由现金流（经营性现金流 - 资本支出）> 0
+  - 自由现金流收益率（FCF / 总市值）> 6%
+  - 经营性现金流 / 净利润 > 0.8（利润有现金支撑，非应收账款堆积）
+  - 资本支出占收入比 < 15%（轻资产模式，无需大量再投入）
+  - ROE > 10%，连续三年正向自由现金流
+
+exit_conditions:
+  - 自由现金流收益率下降至 3% 以下（估值充分反映）
+  - 经营现金流连续两季度大幅恶化（< 净利润 60%）
+  - 公司开始大规模资本性支出（转型重资产）
+
+execution:
+  strategy_class: dual_ma
+  strategy_params:
+    fast_period: 20
+    slow_period: 60
+
+parameters:
+  fcf_yield_min: 6.0
+  ocf_to_profit_min: 0.80
+  capex_to_revenue_max: 15.0
+  roe_min: 10.0
+  stop_loss_pct: 0.08
+  take_profit_pct: 0.25
+
+risk_notes: |
+  部分行业（如地产）现金流季节性波动大，需看全年而非单季。
+  重资产行业（钢铁、化工）因折旧高，FCF与净利润差异大，需单独分析。
+  自由现金流数据更新频率低（季报），需容忍一定信息滞后。

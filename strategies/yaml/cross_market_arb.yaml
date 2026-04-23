@@ -1,0 +1,63 @@
+name: cross_market_arb
+display_name: AH股溢价套利
+description: |
+  同一公司在A股和H股同时上市，当A股溢价率过高（> 30%）时
+  A股有均值回归压力；当A股折价时有补涨动力。
+  跟踪AH溢价变化捕捉结构性机会。
+
+screener:
+  category: value
+  category_color: "#0891b2"
+  icon: repeat
+  risk: 中
+  suitable: AH溢价异常扩大或收窄阶段、港股通资金流向明确时
+  holding_period: 2-8周
+  filters:
+    min_price: 3.0
+    max_pe: 30.0
+    min_pe: 3.0
+    max_pb: 3.0
+  factor_weights:
+    value: 9
+    large_cap: 8
+    pb: 6
+    quality: 6
+    value_composite: 5
+    graham: 4
+    liquidity: 5
+    momentum: 2
+    size: 0
+    float_ratio: 1
+  top_n: 20
+
+entry_conditions:
+  - 同时在A股和H股上市（AH两地上市标的）
+  - A股相对H股溢价率 < 10%（A股相对低估，有补涨逻辑）
+  - 或A股溢价率由高位（> 40%）快速收窄至 20% 以下（趋势）
+  - 港股通标的（北向资金可流入，套利机制存在）
+  - 公司基本面良好，股息率 > 3%（持有期有基础回报）
+
+exit_conditions:
+  - A/H溢价率回归至 20%-30% 历史均值区间
+  - A股溢价率再度扩大至 40% 以上（套利空间再度打开，重新评估）
+  - 持有满 40 日
+
+execution:
+  strategy_class: mean_reversion
+  strategy_params:
+    period: 20
+    std_threshold: 1.5
+
+parameters:
+  ah_premium_max: 10.0
+  ah_premium_target: 25.0
+  stock_connect: true
+  dividend_yield_min: 3.0
+  stop_loss_pct: 0.08
+  take_profit_pct: 0.15
+  max_hold_days: 40
+
+risk_notes: |
+  AH溢价长期存在且难以完全消除，短期反向扩大的风险需警惕。
+  汇率波动（人民币/港元）会影响套利收益，需关注外汇风险。
+  A股流动性远好于H股，但H股折价深时代表外资对公司前景更悲观。

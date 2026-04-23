@@ -1,0 +1,51 @@
+name: supply_chain_core
+display_name: 供应链核心受益
+description: |
+  上游原材料涨价或下游需求爆发时，筛选供应链关键环节的核心受益企业。
+
+screener:
+  category: growth
+  category_color: "#a855f7"
+  icon: link
+  risk: 中
+  suitable: 产业链景气上行期
+  holding_period: 1-3个月
+  filters:
+    min_price: 3.0
+    max_pe: 100.0
+  factor_weights:
+    momentum: 5
+    liquidity: 3
+    value: 2
+    pb: 1
+    quality: 4
+    size: 2
+    large_cap: 0
+    graham: 0
+    value_composite: 0
+    float_ratio: 2
+  top_n: 20
+
+entry_conditions:
+  - 所在产业链景气指数上行
+  - 公司在产业链中具备定价权
+  - 毛利率处于历史高位或持续改善
+  - 订单或收入确认数据向好
+
+exit_conditions:
+  - 产业链景气度见顶回落
+  - 或原材料成本大幅上升压缩利润
+  - 或盈利超过 25%
+  - 或亏损超过 8%
+
+execution:
+  strategy_class: sector_rotation
+  strategy_params:
+    sector_type: supply_chain
+
+parameters:
+  stop_loss_pct: 0.08
+  take_profit_pct: 0.25
+
+risk_notes: |
+  产业链景气具有周期性，需关注景气拐点信号，避免在顶部追入。

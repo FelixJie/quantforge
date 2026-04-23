@@ -1,0 +1,53 @@
+name: high_turnover_momentum
+display_name: 高换手动量追踪
+description: |
+  换手率突然放大（超过近20日均值3倍）且股价上涨，说明资金大量涌入，短期动量强烈。
+
+screener:
+  category: momentum
+  category_color: "#f59e0b"
+  icon: repeat
+  risk: 高
+  suitable: 热点题材行情、资金快进快出
+  holding_period: 3-7个交易日
+  filters:
+    min_price: 3.0
+    max_pe: 200.0
+  factor_weights:
+    momentum: 9
+    liquidity: 5
+    value: 0
+    pb: 0
+    quality: 0
+    size: 3
+    large_cap: 0
+    graham: 0
+    value_composite: 0
+    float_ratio: 5
+  top_n: 15
+
+entry_conditions:
+  - 当日换手率>近20日均值3倍以上
+  - 当日涨幅>3%
+  - 非ST类股票
+  - 近3日价格在均线上方
+
+exit_conditions:
+  - 换手率回归至正常水平
+  - 或出现高位长上影线
+  - 或盈利超过 8%
+  - 或亏损超过 4%
+
+execution:
+  strategy_class: momentum_breakout
+  strategy_params:
+    turnover_window: 20
+
+parameters:
+  turnover_ratio_threshold: 3.0
+  min_price_gain: 0.03
+  stop_loss_pct: 0.04
+  take_profit_pct: 0.08
+
+risk_notes: |
+  高换手往往伴随高风险，庄家出货也会有高换手，需结合价格走势判断资金性质。

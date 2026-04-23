@@ -1,0 +1,65 @@
+name: flag_pattern
+display_name: 旗形整理突破
+description: |
+  急涨后的平行通道整理（旗形）是趋势延续的强力信号。
+  旗杆涨幅越大、旗形整理越紧凑（时间短、振幅小），
+  突破后的续涨幅度往往接近旗杆等幅。
+
+screener:
+  category: momentum
+  category_color: "#f59e0b"
+  icon: flag
+  risk: 中
+  suitable: 强势上涨后的短暂休整、主升浪中段、热点板块轮动期
+  holding_period: 1-2周
+  filters:
+    min_price: 4.0
+    max_pe: 150.0
+    min_pe: 3.0
+    min_change_pct: 0.5
+  factor_weights:
+    momentum: 9
+    liquidity: 6
+    float_ratio: 5
+    size: 3
+    quality: 3
+    value: 1
+    pb: 0
+    large_cap: 0
+    graham: 0
+    value_composite: 1
+  top_n: 15
+
+entry_conditions:
+  - 近 5-10 日内出现急涨旗杆（5日涨幅 > 15%）
+  - 旗杆之后 3-8 日形成平行通道整理（振幅 < 8%）
+  - 整理期间成交量明显萎缩（< 旗杆期均量的 60%）
+  - 整理后向上突破旗形上轨，成交量同步放大
+  - MA5 > MA20 多头排列，大趋势未破
+
+exit_conditions:
+  - 量度目标：旗形突破点 + 旗杆高度（等幅量度）
+  - 跌破旗形下轨（形态失效）
+  - 持有满 10 个交易日
+
+execution:
+  strategy_class: bollinger_breakout
+  strategy_params:
+    period: 10
+    std_dev: 1.5
+
+parameters:
+  flagpole_days: 10
+  flagpole_gain_min: 15.0
+  flag_days_min: 3
+  flag_days_max: 8
+  flag_range_max: 8.0
+  flag_volume_ratio: 0.60
+  stop_loss_pct: 0.06
+  take_profit_pct: 0.15
+  max_hold_days: 10
+
+risk_notes: |
+  旗形整理时间过长（> 10 日）往往演变成顶部横盘，信号弱化。
+  旗杆涨幅过大（> 50%）时，续涨空间有限，谨慎追高。
+  需确认旗形上轨突破是真实放量，避免日内假突破。

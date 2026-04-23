@@ -1,0 +1,64 @@
+name: high_roe_value
+display_name: 高ROE价值股
+description: |
+  筛选 ROE 持续高于 15%、市盈率合理（PE < 30）、市净率偏低的价值成长股。
+  适合长线持有，适用于市场震荡期寻找防御性配置机会。
+
+# ── 选股筛选配置 ────────────────────────────────────────────────
+screener:
+  category: value
+  category_color: "#10b981"
+  icon: shield
+  risk: 低中
+  suitable: 震荡市、防御性配置、长线价值投资
+  holding_period: 1-6个月
+  filters:
+    min_price: 5.0
+    max_pe: 30.0
+    min_pe: 5.0
+    max_pb: 4.0
+  factor_weights:
+    quality: 10
+    value: 8
+    value_composite: 6
+    pb: 5
+    graham: 4
+    momentum: 2
+    liquidity: 2
+    size: 1
+    large_cap: 3
+    float_ratio: 1
+  top_n: 20
+
+# ── LLM 信号分析 ─────────────────────────────────────────────────
+entry_conditions:
+  - ROE(TTM) > 15%，近 3 年 ROE 稳定
+  - PE(TTM) < 30，相对行业估值处于低位
+  - PB < 3，资产质量良好
+  - 净利润增速 > 8%，基本面向好
+  - 股价位于 MA60 之上，趋势健康
+
+exit_conditions:
+  - PE 超过历史均值 1.5 倍
+  - ROE 连续两季大幅下滑
+  - 股价跌破 MA60 且成交量放大
+
+# ── 回测/实盘执行配置 ─────────────────────────────────────────────
+execution:
+  strategy_class: dual_ma
+  strategy_params:
+    fast_period: 20
+    slow_period: 60
+
+parameters:
+  roe_min: 15.0
+  pe_max: 30.0
+  pb_max: 4.0
+  profit_growth_min: 8.0
+  stop_loss_pct: 0.10
+  take_profit_pct: 0.30
+
+risk_notes: |
+  价值陷阱风险：高 ROE 若依赖财务杠杆而非经营能力，需警惕。
+  行业周期风险：银行、地产等行业 ROE 较高但可持续性需关注。
+  建议分散配置不超过 5 只，单只仓位不超过总资金 20%。

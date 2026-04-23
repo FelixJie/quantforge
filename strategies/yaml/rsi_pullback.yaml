@@ -1,0 +1,62 @@
+name: rsi_pullback
+display_name: RSI回调买入
+description: |
+  在上升趋势中等待 RSI 回调至 40-50 区间（短期超卖但趋势未破），
+  结合均线支撑买入，捕捉趋势延续中的低吸机会。
+
+screener:
+  category: momentum
+  category_color: "#10b981"
+  icon: trending-up
+  risk: 中
+  suitable: 牛市中继、趋势上升期回调、强势股回踩均线
+  holding_period: 1-3周
+  filters:
+    min_price: 5.0
+    max_pe: 80.0
+    min_pe: 4.0
+  factor_weights:
+    momentum: 7
+    quality: 5
+    value: 3
+    liquidity: 4
+    pb: 2
+    size: 2
+    large_cap: 2
+    graham: 1
+    value_composite: 2
+    float_ratio: 2
+  top_n: 20
+
+entry_conditions:
+  - 60 日趋势向上（MA20 > MA60，长期多头格局）
+  - RSI(14) 回调至 40-52 区间（短期弱势但未超卖）
+  - 股价回踩至 MA20 附近（偏离 ±3%）
+  - 成交量在回调期间萎缩（下跌无量，健康回调）
+  - 近 60 日创过阶段新高（强势股调整，非趋势逆转）
+
+exit_conditions:
+  - RSI 重新升至 65 以上（短期强势恢复，考虑减仓）
+  - 收盘价跌破 MA20 超过 3%
+  - 持有满 20 日强制止盈止损
+
+execution:
+  strategy_class: dual_ma
+  strategy_params:
+    fast_period: 10
+    slow_period: 30
+
+parameters:
+  trend_ma_fast: 20
+  trend_ma_slow: 60
+  rsi_buy_low: 40
+  rsi_buy_high: 52
+  ma_tolerance: 0.03
+  stop_loss_pct: 0.07
+  take_profit_pct: 0.15
+  max_hold_days: 20
+
+risk_notes: |
+  此策略仅适用于上升趋势中的回调，趋势反转时不可用。
+  需严格确认大趋势：MA20 必须在 MA60 之上。
+  RSI 跌破 40 不买入（可能是真正调整而非回调）。

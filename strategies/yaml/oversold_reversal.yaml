@@ -1,0 +1,65 @@
+name: oversold_reversal
+display_name: 超跌反弹
+description: |
+  捕捉短期非理性下跌后的技术反弹机会。筛选近 20 日跌幅较大、
+  RSI 进入超卖区域（< 30）、基本面无明显恶化的个股。
+  适合短线交易，需严格止损。
+
+# ── 选股筛选配置 ────────────────────────────────────────────────
+screener:
+  category: reversal
+  category_color: "#f59e0b"
+  icon: arrow-up
+  risk: 高
+  suitable: 市场恐慌底部、板块轮动低点、情绪极度悲观期
+  holding_period: 3-10天
+  filters:
+    min_price: 3.0
+    max_pe: 80.0
+    min_pe: 3.0
+    min_change_pct: -15.0   # 近期跌幅 > 15% 触发条件
+  factor_weights:
+    momentum: -8            # 负动量：反转选股
+    value: 5
+    liquidity: 6
+    size: 3
+    pb: 3
+    quality: 4
+    large_cap: 2
+    graham: 0
+    value_composite: 2
+    float_ratio: 3
+  top_n: 15
+
+# ── LLM 信号分析 ─────────────────────────────────────────────────
+entry_conditions:
+  - 近 20 日最大跌幅 > 20%
+  - RSI(14) < 35，进入超卖区间
+  - 当日成交量缩量（< 5日均量的 0.7 倍），恐慌情绪释放
+  - 股价不低于历史最低价的 110%（非垃圾股）
+  - 基本面无重大利空公告
+
+exit_conditions:
+  - RSI(14) 反弹至 55 以上
+  - 股价回到 20 日均线附近
+  - 或持有超过 10 个交易日强制止损/止盈
+
+# ── 回测/实盘执行配置 ─────────────────────────────────────────────
+execution:
+  strategy_class: mean_reversion
+  strategy_params:
+    period: 20
+    std_threshold: 2.0
+
+parameters:
+  drawdown_min: 0.20
+  rsi_oversold: 35
+  volume_ratio_max: 0.70
+  stop_loss_pct: 0.08
+  take_profit_pct: 0.15
+  max_hold_days: 10
+
+risk_notes: |
+  超跌反弹策略高风险，部分超跌股可能继续下跌（趋势股）。
+  必须设置严格止损（≤8%），分批建仓为宜。
+  避免在熊市主跌浪中使用此策略，适合震荡底部或情绪极度悲观时。

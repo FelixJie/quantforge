@@ -1,0 +1,55 @@
+name: volatility_breakout
+display_name: 低波动突破
+description: |
+  历史波动率持续收缩后（ATR创近期低点），一旦价格方向性突破，往往是大行情起点。
+
+screener:
+  category: momentum
+  category_color: "#f59e0b"
+  icon: activity
+  risk: 中
+  suitable: 行情启动前夕、强势整理末期
+  holding_period: 2-6周
+  filters:
+    min_price: 3.0
+    max_pe: 150.0
+  factor_weights:
+    momentum: 7
+    liquidity: 4
+    value: 1
+    pb: 0
+    quality: 0
+    size: 2
+    large_cap: 0
+    graham: 0
+    value_composite: 0
+    float_ratio: 3
+  top_n: 20
+
+entry_conditions:
+  - ATR(14) 处于近90日最低20%分位
+  - 布林带带宽收窄至近60日最小值
+  - 价格突破布林带上轨或近期平台高点
+  - 突破后成交量放大
+
+exit_conditions:
+  - 价格跌回布林带中轨
+  - 或ATR重新扩大后价格方向不明
+  - 或盈利超过 15%
+  - 或亏损超过 5%
+
+execution:
+  strategy_class: bollinger_breakout
+  strategy_params:
+    period: 20
+    std_dev: 2.0
+
+parameters:
+  atr_period: 14
+  atr_percentile: 0.20
+  bb_period: 20
+  stop_loss_pct: 0.05
+  take_profit_pct: 0.15
+
+risk_notes: |
+  低波动后的突破方向不确定，需等待明确方向才入场，不要预判方向提前埋伏。

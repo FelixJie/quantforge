@@ -1,0 +1,65 @@
+name: multi_timeframe
+display_name: 多周期共振
+description: |
+  日线、周线、月线三个周期同时发出看多信号时买入。
+  多周期共振代表短中长期趋势高度一致，
+  是趋势类策略中胜率和持续性最强的入场信号。
+
+screener:
+  category: momentum
+  category_color: "#b45309"
+  icon: layers
+  risk: 中
+  suitable: 新一轮牛市启动初期、强势股上涨加速阶段
+  holding_period: 1-2个月
+  filters:
+    min_price: 5.0
+    max_pe: 100.0
+    min_pe: 4.0
+  factor_weights:
+    momentum: 10
+    quality: 5
+    liquidity: 4
+    value: 2
+    float_ratio: 3
+    size: 2
+    pb: 1
+    large_cap: 2
+    graham: 0
+    value_composite: 2
+  top_n: 15
+
+entry_conditions:
+  - 月线：MA3 > MA6 > MA12（月线多头，长期趋势向上）
+  - 周线：MA5 > MA10 > MA20 且 MACD 在零轴以上（中期趋势向上）
+  - 日线：回调至 MA20 支撑后再度上涨，RSI 在 50-70 健康区间
+  - 三个周期同时满足（多周期共振）
+  - 近 20 日相对大盘超额收益 > 3%（个股强于市场）
+
+exit_conditions:
+  - 日线 MA5 跌破 MA20（短期趋势破坏，减仓）
+  - 周线 MACD 死叉（中期趋势转弱，清仓）
+  - 持有满 40 日重新评估多周期共振状态
+
+execution:
+  strategy_class: dual_ma
+  strategy_params:
+    fast_period: 20
+    slow_period: 60
+
+parameters:
+  monthly_ma3: 3
+  monthly_ma6: 6
+  monthly_ma12: 12
+  weekly_macd_positive: true
+  daily_rsi_range: [50, 70]
+  relative_strength_days: 20
+  relative_strength_min: 0.03
+  stop_loss_pct: 0.07
+  take_profit_pct: 0.25
+  max_hold_days: 40
+
+risk_notes: |
+  多周期共振信号稀少但质量高，需保持耐心等待完美共振点。
+  月线级别转向信号滞后，出现问题时日线早已破位，需以日线止损为准。
+  强势行情中多周期共振股往往是机构重仓，大盘急跌时也会连带下跌。

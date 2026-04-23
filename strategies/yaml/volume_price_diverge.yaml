@@ -1,0 +1,63 @@
+name: volume_price_diverge
+display_name: 量价背离预警
+description: |
+  股价创新高但成交量未同步放大（顶部量价背离），是主力出货信号。
+  反向操作：在量价背离出现后等待股价回落确认，再做空（或规避买入），
+  A股限于做多方向：用于规避持仓风险和寻找做多替代标的。
+
+screener:
+  category: reversal
+  category_color: "#b91c1c"
+  icon: trending-down
+  risk: 中
+  suitable: 高位震荡期、板块轮动末端、主力拉高出货阶段
+  holding_period: 1-2周
+  filters:
+    min_price: 5.0
+    max_pe: 200.0
+    min_pe: 3.0
+    min_change_pct: -3.0
+  factor_weights:
+    momentum: -6
+    value: 4
+    quality: 4
+    liquidity: 5
+    size: 3
+    pb: 3
+    large_cap: 3
+    graham: 1
+    value_composite: 2
+    float_ratio: 3
+  top_n: 20
+
+entry_conditions:
+  - 近 5 日股价创近 20 日新高，但成交量 < 前 5 日均量（顶部量价背离）
+  - 或 MACD 顶部背离：股价创新高，DIF 未同步创新高
+  - 股价已从阶段高点回落超过 5%（背离信号兑现，趋势转弱确认）
+  - 此时做多信号：筛选此类弱势股的对立面（回避持仓警示）
+  - 资金净流出连续 3 日（大单净流出确认出货信号）
+
+exit_conditions:
+  - 量价背离修复（缩量后出现放量上涨，主力重新介入）
+  - 股价跌幅 > 15%（背离充分兑现，反弹机会出现）
+  - 持有满 10 个交易日
+
+execution:
+  strategy_class: mean_reversion
+  strategy_params:
+    period: 20
+    std_threshold: 1.5
+
+parameters:
+  new_high_period: 20
+  volume_diverge_ratio: 0.80
+  post_diverge_drop_min: 5.0
+  net_outflow_days: 3
+  stop_loss_pct: 0.05
+  take_profit_pct: 0.12
+  max_hold_days: 10
+
+risk_notes: |
+  量价背离在强势牛市中频繁失效——主力缩量上涨也是控盘表现。
+  此策略主要用于识别风险，规避持仓中出现背离的标的。
+  不要在整体市场大涨时用此策略做空方向判断。

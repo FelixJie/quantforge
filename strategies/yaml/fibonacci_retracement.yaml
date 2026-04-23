@@ -1,0 +1,55 @@
+name: fibonacci_retracement
+display_name: 斐波那契回调买入
+description: |
+  在主升浪后回调至38.2%或61.8%黄金分割位时买入，等待趋势恢复。
+  结合成交量缩量确认回调充分。
+
+screener:
+  category: reversal
+  category_color: "#06b6d4"
+  icon: git-commit
+  risk: 中
+  suitable: 上升趋势中途回调
+  holding_period: 2-5周
+  filters:
+    min_price: 5.0
+    max_pe: 120.0
+  factor_weights:
+    momentum: 5
+    liquidity: 3
+    value: 2
+    pb: 1
+    quality: 1
+    size: 2
+    large_cap: 0
+    graham: 0
+    value_composite: 0
+    float_ratio: 2
+  top_n: 20
+
+entry_conditions:
+  - 前期上涨幅度超过 20%
+  - 回调至 38.2% 或 61.8% 斐波那契位附近（±1.5%）
+  - 回调期间成交量明显缩量
+  - 在关键位出现止跌阳线
+
+exit_conditions:
+  - 跌破 61.8% 回调位
+  - 或创新高后目标达到前高
+  - 或盈利超过 15%
+  - 或亏损超过 6%
+
+execution:
+  strategy_class: mean_reversion
+  strategy_params:
+    lookback: 30
+
+parameters:
+  fib_levels: [0.382, 0.618]
+  prior_rally_min: 0.20
+  tolerance: 0.015
+  stop_loss_pct: 0.06
+  take_profit_pct: 0.15
+
+risk_notes: |
+  需要明确识别前期主升浪的起点和终点，斐波那契位计算准确性很重要。

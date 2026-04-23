@@ -1,0 +1,60 @@
+name: t_plus_swing
+display_name: 波段T+操作
+description: |
+  利用持仓股在震荡行情中的日内波动，在高位减仓次日低位补回，
+  降低持仓成本。适合已持有优质股票的投资者在横盘期增厚收益。
+
+screener:
+  category: momentum
+  category_color: "#2563eb"
+  icon: repeat
+  risk: 中
+  suitable: 横盘震荡行情、持仓股波动率较高时期
+  holding_period: 日内-3天
+  filters:
+    min_price: 5.0
+    max_pe: 60.0
+    min_pe: 5.0
+  factor_weights:
+    liquidity: 10
+    momentum: 5
+    float_ratio: 6
+    size: 4
+    quality: 4
+    value: 3
+    pb: 2
+    large_cap: 2
+    graham: 0
+    value_composite: 1
+  top_n: 20
+
+entry_conditions:
+  - 股票已在持仓中（T+操作需要底仓）
+  - 当日涨幅 > 3%，达到短期阶段性高点（卖出信号）
+  - 成交量当日放大 > 1.5 倍（量能充分，适合波段）
+  - 日均成交额 > 5 亿（流动性足够支撑 T+ 操作）
+  - 次日若出现回调 > 2%，在支撑位补回（买入信号）
+
+exit_conditions:
+  - 趋势明确向上时，不做 T+，持仓不动
+  - 操作亏损（补回价格高于卖出价格）立即止损
+  - 公司有重大消息公布时暂停 T+ 操作
+
+execution:
+  strategy_class: mean_reversion
+  strategy_params:
+    period: 5
+    std_threshold: 1.0
+
+parameters:
+  intraday_gain_trigger: 3.0
+  intraday_volume_ratio: 1.5
+  daily_turnover_min: 500000000
+  pullback_trigger: 2.0
+  stop_loss_pct: 0.02
+  max_hold_days: 3
+
+risk_notes: |
+  T+ 操作需要对个股走势有较高把握，新手不建议使用。
+  补回失败（价格未回调）会导致临时空仓，错失涨幅。
+  A股 T+1 制度，当日买入不能当日卖出，需提前规划底仓。

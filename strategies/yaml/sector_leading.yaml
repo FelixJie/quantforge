@@ -1,0 +1,53 @@
+name: sector_leading
+display_name: 板块龙头轮动
+description: |
+  板块指数率先创新高后，筛选板块内尚未跟涨的次龙头，捕捉板块内部扩散效应。
+
+screener:
+  category: momentum
+  category_color: "#f59e0b"
+  icon: users
+  risk: 中
+  suitable: 板块轮动行情、牛市中期
+  holding_period: 1-3周
+  filters:
+    min_price: 3.0
+    max_pe: 150.0
+  factor_weights:
+    momentum: 6
+    liquidity: 4
+    value: 1
+    pb: 0
+    quality: 1
+    size: 3
+    large_cap: 0
+    graham: 0
+    value_composite: 0
+    float_ratio: 3
+  top_n: 20
+
+entry_conditions:
+  - 所属板块指数近5日涨幅>5%
+  - 个股近5日涨幅低于板块均值（尚未跟涨）
+  - 个股为板块内市值前5（次龙头）
+  - 个股量能开始放大
+
+exit_conditions:
+  - 板块指数跌破5日均线
+  - 或个股已涨至板块领涨股涨幅的80%
+  - 或盈利超过 12%
+  - 或亏损超过 5%
+
+execution:
+  strategy_class: sector_rotation
+  strategy_params:
+    sector_window: 5
+
+parameters:
+  sector_min_gain: 0.05
+  stock_lag_ratio: 0.5
+  stop_loss_pct: 0.05
+  take_profit_pct: 0.12
+
+risk_notes: |
+  板块行情持续性存在不确定性，避免在板块涨幅已大时追入跟涨股。

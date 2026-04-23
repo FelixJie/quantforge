@@ -1,0 +1,54 @@
+name: machine_learning_alpha
+display_name: ML多因子选股
+description: |
+  使用机器学习模型（XGBoost/LightGBM）融合技术、基本面、情绪因子，预测未来5日超额收益。
+
+screener:
+  category: multi_factor
+  category_color: "#8b5cf6"
+  icon: cpu
+  risk: 中
+  suitable: 全市场条件，偏震荡市效果更佳
+  holding_period: 1-2周
+  filters:
+    min_price: 3.0
+    max_pe: 200.0
+  factor_weights:
+    momentum: 3
+    liquidity: 3
+    value: 2
+    pb: 1
+    quality: 3
+    size: 2
+    large_cap: 1
+    graham: 0
+    value_composite: 1
+    float_ratio: 1
+  top_n: 30
+
+entry_conditions:
+  - ML模型预测评分>80分（满分100）
+  - 技术因子、基本面因子同向
+  - 近5日情绪因子为正
+  - 流动性满足交易需求
+
+exit_conditions:
+  - ML评分降至60以下
+  - 或持仓超过10个交易日
+  - 或盈利超过 12%
+  - 或亏损超过 5%
+
+execution:
+  strategy_class: ml_factor
+  strategy_params:
+    model_type: xgboost
+    feature_window: 20
+
+parameters:
+  score_threshold: 80
+  rebalance_frequency: 5
+  stop_loss_pct: 0.05
+  take_profit_pct: 0.12
+
+risk_notes: |
+  ML模型存在过拟合风险，需定期重训练。市场结构突变时模型失效风险高。

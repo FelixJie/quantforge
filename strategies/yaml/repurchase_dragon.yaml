@@ -1,0 +1,61 @@
+name: repurchase_dragon
+display_name: 回购增持龙头
+description: |
+  上市公司披露大规模股票回购或大股东增持计划后，往往是
+  公司认为股价被低估的强力信号。结合基本面筛选真正值得跟进的标的。
+
+screener:
+  category: value
+  category_color: "#0891b2"
+  icon: refresh-cw
+  risk: 低中
+  suitable: 熊市底部、估值洼地、公司内部人增持信号期
+  holding_period: 1-3个月
+  filters:
+    min_price: 3.0
+    max_pe: 50.0
+    min_pe: 5.0
+  factor_weights:
+    quality: 8
+    value: 8
+    graham: 5
+    value_composite: 6
+    pb: 5
+    momentum: 2
+    liquidity: 4
+    large_cap: 3
+    size: 2
+    float_ratio: 1
+  top_n: 20
+
+entry_conditions:
+  - 近 30 日内发布股票回购预案（回购金额 > 总市值的 1%）
+  - 或大股东/实控人增持比例 > 0.5% 流通股
+  - 公司 ROE > 10%，PE < 40（非垃圾公司自救式回购）
+  - 回购价格上限 > 当前股价的 1.1 倍（回购空间充裕）
+  - 股价距 52 周高点跌幅 > 20%（存在明显低估）
+
+exit_conditions:
+  - 回购计划完成或终止
+  - 股价达到回购价格上限
+  - 基本面恶化信号（业绩预警、大股东减持）
+
+execution:
+  strategy_class: dual_ma
+  strategy_params:
+    fast_period: 10
+    slow_period: 30
+
+parameters:
+  repurchase_ratio_min: 0.01
+  repurchase_window_days: 30
+  roe_min: 10.0
+  pe_max: 40.0
+  drawdown_from_high: 0.20
+  stop_loss_pct: 0.08
+  take_profit_pct: 0.25
+
+risk_notes: |
+  回购是信号而非必然上涨的保证，仍需公司基本面支撑。
+  部分公司回购金额小（< 0.5% 市值），实质意义有限，需过滤。
+  回购计划可能因市场条件变化而中止，需持续跟踪执行进度。

@@ -1,0 +1,61 @@
+name: macro_cycle
+display_name: 宏观周期轮动
+description: |
+  根据经济周期阶段（复苏/过热/滞胀/衰退）配置不同风格的行业：
+  复苏期买周期品，过热期买能源/原材料，滞胀期防御，衰退期现金。
+  宏观驱动的系统性机会，适合中长线资产配置视角。
+
+screener:
+  category: multi_factor
+  category_color: "#0891b2"
+  icon: globe
+  risk: 中
+  suitable: 宏观经济趋势明确时期、大类资产轮动阶段
+  holding_period: 1-6个月
+  filters:
+    min_price: 3.0
+    max_pe: 50.0
+    min_pe: 3.0
+  factor_weights:
+    momentum: 5
+    value: 5
+    quality: 5
+    large_cap: 5
+    liquidity: 5
+    value_composite: 3
+    pb: 2
+    size: 2
+    graham: 1
+    float_ratio: 1
+  top_n: 25
+
+entry_conditions:
+  - 复苏期（PMI回升+CPI低位）：布局金融、地产、可选消费
+  - 过热期（PMI高位+CPI上行）：布局能源、原材料、工业
+  - 滞胀期（PMI下行+CPI高位）：布局必需消费、医药、公用事业
+  - 衰退期（PMI低位+CPI下行）：布局债券、黄金、高股息股
+  - 个股需是所处行业的龙头（流通市值 > 50 亿，市占率领先）
+
+exit_conditions:
+  - 经济周期阶段发生转换（监测PMI、CPI、社融等宏观指标）
+  - 持有行业相对大盘跑输超过 10%（周期判断失误）
+  - 宏观政策出现重大转向信号
+
+execution:
+  strategy_class: dual_ma
+  strategy_params:
+    fast_period: 20
+    slow_period: 60
+
+parameters:
+  pmi_threshold: 50.0
+  cycle_review_period: 30
+  industry_leader: true
+  float_cap_min: 50.0
+  stop_loss_pct: 0.10
+  take_profit_pct: 0.30
+
+risk_notes: |
+  宏观周期判断主观性强，同一数据不同机构解读可能相反。
+  中国经济周期与美国有时不同步，需区分国内外经济状态。
+  建议用ETF而非个股实现宏观轮动，降低个股风险。

@@ -1,0 +1,55 @@
+name: price_channel
+display_name: 价格通道突破
+description: |
+  布林带或唐奇安通道上轨突破，配合量能确认，捕捉强势趋势启动信号。
+
+screener:
+  category: momentum
+  category_color: "#f59e0b"
+  icon: maximize-2
+  risk: 中
+  suitable: 趋势行情初期、板块轮动
+  holding_period: 2-5周
+  filters:
+    min_price: 4.0
+    max_pe: 150.0
+  factor_weights:
+    momentum: 8
+    liquidity: 4
+    value: 0
+    pb: 0
+    quality: 1
+    size: 2
+    large_cap: 0
+    graham: 0
+    value_composite: 0
+    float_ratio: 2
+  top_n: 20
+
+entry_conditions:
+  - 收盘价突破20日最高价（唐奇安上轨）
+  - 突破时成交量>10日均量1.5倍
+  - 价格位于布林带上轨以上
+  - 前期横盘整理时间超过10个交易日
+
+exit_conditions:
+  - 收盘价跌破10日均线
+  - 或价格回落至布林带中轨
+  - 或盈利超过 15%
+  - 或亏损超过 6%
+
+execution:
+  strategy_class: bollinger_breakout
+  strategy_params:
+    period: 20
+    std_dev: 2.0
+
+parameters:
+  channel_period: 20
+  volume_ratio: 1.5
+  consolidation_days: 10
+  stop_loss_pct: 0.06
+  take_profit_pct: 0.15
+
+risk_notes: |
+  高位突破假突破风险高，建议等当日收盘确认后操作，避免开盘追涨。

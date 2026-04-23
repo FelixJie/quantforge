@@ -1,0 +1,57 @@
+name: dividend_growth
+display_name: 股息成长股
+description: |
+  连续5年分红且股息率逐年提升，分红覆盖率>150%，兼具股息收益和成长属性。
+
+screener:
+  category: value
+  category_color: "#3b82f6"
+  icon: gift
+  risk: 低
+  suitable: 长线防御配置、熊市保值
+  holding_period: 6-12个月
+  filters:
+    min_price: 5.0
+    max_pe: 30.0
+    min_pe: 5.0
+    min_market_cap: 50.0
+  factor_weights:
+    momentum: 1
+    liquidity: 2
+    value: 5
+    pb: 2
+    quality: 6
+    size: 0
+    large_cap: 3
+    graham: 0
+    value_composite: 1
+    float_ratio: 0
+  top_n: 20
+
+entry_conditions:
+  - 连续5年现金分红
+  - 股息率>3%且逐年递增
+  - 股息支付率<70%（留有增长空间）
+  - 自由现金流覆盖股息1.5倍以上
+
+exit_conditions:
+  - 公司宣布减少或取消分红
+  - 或业绩出现大幅下滑
+  - 或估值严重高估（PE>历史均值+2σ）
+  - 或亏损超过 12%
+
+execution:
+  strategy_class: factor_ranking
+  strategy_params:
+    primary_factor: dividend_yield
+
+parameters:
+  min_dividend_years: 5
+  min_dividend_yield: 0.03
+  max_payout_ratio: 0.70
+  fcf_coverage: 1.5
+  stop_loss_pct: 0.12
+  take_profit_pct: 0.30
+
+risk_notes: |
+  高股息率有时是股价下跌导致，需区分主动派息还是被动高息，避免股息陷阱。

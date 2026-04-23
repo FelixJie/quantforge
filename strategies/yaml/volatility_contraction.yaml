@@ -1,0 +1,62 @@
+name: volatility_contraction
+display_name: 波动率收缩选股
+description: |
+  历史波动率（HV）处于近 60 日低点，说明市场对该股分歧减少、
+  主力在悄悄建仓。波动率低谷往往是大行情启动前的蓄力期。
+  结合价格和成交量形态确认方向。
+
+screener:
+  category: momentum
+  category_color: "#0369a1"
+  icon: minimize-2
+  risk: 中
+  suitable: 个股横盘整理末期、主力建仓阶段、突破前的安静期
+  holding_period: 1-4周
+  filters:
+    min_price: 4.0
+    max_pe: 100.0
+    min_pe: 3.0
+  factor_weights:
+    momentum: 5
+    liquidity: 6
+    float_ratio: 5
+    size: 4
+    quality: 4
+    value: 3
+    pb: 2
+    large_cap: 1
+    graham: 0
+    value_composite: 2
+  top_n: 20
+
+entry_conditions:
+  - 近 10 日历史波动率（HV10）低于近 60 日均值的 50%（极度压缩）
+  - 近 20 日价格涨跌幅不超过 ±5%（价格横盘收敛）
+  - 成交量逐渐萎缩后出现异动放量（突破信号）
+  - 股价在 MA20 附近稳定（均线粘合，即将选择方向）
+  - 近 30 日无重大利空消息
+
+exit_conditions:
+  - 波动率急剧扩大但价格未向上突破（向下破位，止损）
+  - 突破后价格涨幅超过 15%（目标位）
+  - 持有超过 20 个交易日未出现突破（失去耐心，离场）
+
+execution:
+  strategy_class: bollinger_breakout
+  strategy_params:
+    period: 20
+    std_dev: 1.5
+
+parameters:
+  hv_period: 10
+  hv_lookback: 60
+  hv_compression_ratio: 0.50
+  price_range_pct: 5.0
+  stop_loss_pct: 0.05
+  take_profit_pct: 0.15
+  max_hold_days: 20
+
+risk_notes: |
+  波动率收缩后的突破方向不确定，需等待价格明确选择方向再入场。
+  部分低波动是因为市场遗忘该股，而非主力建仓，需结合成交量判断。
+  不适合在熊市主跌段使用，低波动后可能直接向下破位。

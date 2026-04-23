@@ -1,0 +1,61 @@
+name: head_shoulder_bottom
+display_name: 头肩底反转
+description: |
+  经典头肩底形态：左肩 > 头部 < 右肩，右肩成交量减少，
+  颈线突破时放量。是技术分析中可靠性最高的底部反转形态之一。
+
+screener:
+  category: reversal
+  category_color: "#7c3aed"
+  icon: user
+  risk: 中
+  suitable: 中长期调整末期、熊市见底后的反转行情
+  holding_period: 4-12周
+  filters:
+    min_price: 4.0
+    max_pe: 80.0
+    min_pe: 3.0
+    min_change_pct: -15.0
+  factor_weights:
+    momentum: -3
+    value: 6
+    quality: 5
+    liquidity: 5
+    size: 3
+    pb: 4
+    large_cap: 3
+    graham: 2
+    value_composite: 3
+    float_ratio: 2
+  top_n: 10
+
+entry_conditions:
+  - 近 60 日内形成头肩底形态（左肩、头部、右肩三低点可识别）
+  - 头部是三点中最低，左肩和右肩价格相近（差异 < 5%）
+  - 右肩成交量 < 左肩成交量（缩量右肩，卖压减弱）
+  - 颈线（连接左肩和右肩之间高点）被有效突破并收盘
+  - 突破颈线后价格回踩确认支撑（回踩颈线不破）
+
+exit_conditions:
+  - 量度目标：颈线 + 头部到颈线距离（形态等幅目标位）
+  - 重新跌破颈线超过 3%（形态失效）
+  - 持有满 60 日
+
+execution:
+  strategy_class: mean_reversion
+  strategy_params:
+    period: 30
+    std_threshold: 2.0
+
+parameters:
+  hs_bottom_period: 60
+  shoulder_diff_max: 5.0
+  right_volume_ratio: 1.0
+  stop_loss_pct: 0.06
+  take_profit_pct: 0.20
+  max_hold_days: 60
+
+risk_notes: |
+  头肩底形态周期较长，需耐心等待完整形态出现再入场。
+  颈线斜率向上比水平颈线更强势，斜率向下需谨慎。
+  成交量配合是关键，无量突破颈线假突破概率大。

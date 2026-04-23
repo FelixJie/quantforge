@@ -1,0 +1,51 @@
+name: doji_reversal
+display_name: 十字星变盘信号
+description: |
+  连续下跌后出现十字星（开盘价≈收盘价），反映多空力量均衡，结合放量确认即将变盘。
+
+screener:
+  category: reversal
+  category_color: "#06b6d4"
+  icon: minus
+  risk: 中
+  suitable: 下跌末期、底部震荡期
+  holding_period: 3-10个交易日
+  filters:
+    min_price: 3.0
+    max_pe: 100.0
+  factor_weights:
+    momentum: 2
+    liquidity: 4
+    value: 3
+    pb: 1
+    quality: 0
+    size: 2
+    large_cap: 0
+    graham: 0
+    value_composite: 0
+    float_ratio: 3
+  top_n: 20
+
+entry_conditions:
+  - 出现十字星（实体<1%振幅，上下影线均有）
+  - 前5日处于下跌趋势
+  - 十字星出现在重要支撑位附近
+  - 次日出现上涨阳线确认
+
+exit_conditions:
+  - 跌破十字星下影线低点
+  - 或盈利超过 8%
+  - 或亏损超过 4%
+
+execution:
+  strategy_class: mean_reversion
+  strategy_params:
+    lookback: 5
+
+parameters:
+  body_pct_max: 0.01
+  stop_loss_pct: 0.04
+  take_profit_pct: 0.08
+
+risk_notes: |
+  十字星不等于底部，必须等次日确认阳线后再入场，避免假反转。

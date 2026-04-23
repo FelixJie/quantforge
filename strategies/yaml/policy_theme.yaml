@@ -1,0 +1,59 @@
+name: policy_theme
+display_name: 政策主题
+description: |
+  跟踪国家重点政策方向（新能源、半导体、AI、国产替代等），
+  在政策密集出台初期布局相关龙头，政策预期兑现后逐步退出。
+
+screener:
+  category: growth
+  category_color: "#dc2626"
+  icon: flag
+  risk: 中高
+  suitable: 政策密集出台期、两会行情、行业补贴/扶持政策落地初期
+  holding_period: 1-2个月
+  filters:
+    min_price: 3.0
+    max_pe: 300.0
+    min_pe: 5.0
+  factor_weights:
+    momentum: 8
+    quality: 5
+    liquidity: 5
+    float_ratio: 4
+    size: 3
+    value: 2
+    pb: 1
+    large_cap: 2
+    graham: 0
+    value_composite: 2
+  top_n: 20
+
+entry_conditions:
+  - 所属行业在近 30 日内有重要政策（国务院/部委级别）出台
+  - 个股是该政策方向的直接受益龙头（受益明确，非概念炒作）
+  - 近 5 日涨幅不超过 20%（政策公布后初期介入，非追涨）
+  - 机构研报有明确政策受益评级（近 30 日内）
+  - 公司基本面良好：营收增长，无重大亏损
+
+exit_conditions:
+  - 政策利好充分兑现，市盈率已超历史 80% 分位
+  - 政策方向发生转变或执行力度低于预期
+  - 相关板块连续 3 日净流出，情绪退潮
+
+execution:
+  strategy_class: dual_ma
+  strategy_params:
+    fast_period: 5
+    slow_period: 20
+
+parameters:
+  policy_window_days: 30
+  post_policy_entry_days: 5
+  max_gain_before_entry: 0.20
+  stop_loss_pct: 0.08
+  take_profit_pct: 0.25
+
+risk_notes: |
+  政策主题行情炒作成分重，需区分直接受益与概念蹭热点。
+  政策落地周期往往比市场预期长，需有耐心或设置时间止损。
+  两会行情通常在会议结束后见顶，应提前规划退出节点。

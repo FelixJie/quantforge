@@ -1,0 +1,54 @@
+name: cci_breakout
+display_name: CCI超买突破
+description: |
+  CCI从超卖区(-100以下)上穿-100时产生买入信号，反映价格从极度弱势中反弹。
+  配合量能放大确认，捕捉短期反弹机会。
+
+screener:
+  category: reversal
+  category_color: "#06b6d4"
+  icon: activity
+  risk: 中
+  suitable: 弱市超跌反弹、震荡市底部
+  holding_period: 1-3周
+  filters:
+    min_price: 3.0
+    max_pe: 100.0
+  factor_weights:
+    momentum: 3
+    liquidity: 4
+    value: 3
+    pb: 1
+    quality: 0
+    size: 2
+    large_cap: 0
+    graham: 0
+    value_composite: 0
+    float_ratio: 2
+  top_n: 20
+
+entry_conditions:
+  - CCI(14) 从 -100 以下上穿 -100
+  - 股价相对近30日低点回升3%以上
+  - 成交量当日放大
+  - MACD柱状线由负转正或收窄
+
+exit_conditions:
+  - CCI(14) 超过 +100 后开始回落
+  - 或收盘价跌破前低
+  - 或盈利超过 12%
+  - 或亏损超过 5%
+
+execution:
+  strategy_class: mean_reversion
+  strategy_params:
+    lookback: 14
+
+parameters:
+  cci_period: 14
+  cci_oversold: -100
+  stop_loss_pct: 0.05
+  take_profit_pct: 0.12
+
+risk_notes: |
+  超跌不代表底部，需等待明确上穿信号再操作，避免接飞刀。

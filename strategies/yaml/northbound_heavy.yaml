@@ -1,0 +1,53 @@
+name: northbound_heavy
+display_name: 北向重仓持续增持
+description: |
+  北向资金连续5日净买入且持股比例持续上升，外资判断准确性高，具备长期参考价值。
+
+screener:
+  category: multi_factor
+  category_color: "#8b5cf6"
+  icon: arrow-up
+  risk: 中
+  suitable: 外资流入期、A股国际化行情
+  holding_period: 2-8周
+  filters:
+    min_price: 5.0
+    max_pe: 60.0
+    min_market_cap: 100.0
+  factor_weights:
+    momentum: 4
+    liquidity: 3
+    value: 3
+    pb: 1
+    quality: 4
+    size: 0
+    large_cap: 3
+    graham: 0
+    value_composite: 1
+    float_ratio: 0
+  top_n: 20
+
+entry_conditions:
+  - 北向资金连续5交易日净买入
+  - 北向持股比例创近一年新高
+  - 个股为沪深港通标的
+  - 公司治理评级高、信息披露透明
+
+exit_conditions:
+  - 北向资金连续3日净卖出
+  - 或持股比例快速下降
+  - 或盈利超过 15%
+  - 或亏损超过 7%
+
+execution:
+  strategy_class: institutional_tracker
+  strategy_params:
+    institution_type: northbound
+
+parameters:
+  consecutive_days: 5
+  stop_loss_pct: 0.07
+  take_profit_pct: 0.15
+
+risk_notes: |
+  汇率变动和全球风险偏好变化会导致北向资金阶段性大幅流出，需关注宏观环境。

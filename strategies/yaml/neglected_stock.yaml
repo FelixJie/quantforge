@@ -1,0 +1,63 @@
+name: neglected_stock
+display_name: 冷门低覆盖掘金
+description: |
+  机构分析师覆盖少（< 5 家）但基本面优秀的"冷门股"，
+  往往因信息传播不足而长期被低估。一旦被机构发现并覆盖，
+  往往迎来估值重定价的快速上涨。
+
+screener:
+  category: value
+  category_color: "#0f766e"
+  icon: search
+  risk: 中
+  suitable: 机构覆盖空白期、成长赛道扩散阶段、冷门板块景气复苏
+  holding_period: 1-6个月
+  filters:
+    min_price: 4.0
+    max_pe: 60.0
+    min_pe: 5.0
+  factor_weights:
+    quality: 9
+    value: 8
+    size: 5
+    float_ratio: 5
+    value_composite: 5
+    pb: 4
+    graham: 3
+    momentum: 2
+    liquidity: 3
+    large_cap: 0
+  top_n: 20
+
+entry_conditions:
+  - 券商研报覆盖数量 < 5 家（低关注度）
+  - ROE > 12%，净利润增速 > 15%（冷门不等于差，基本面须扎实）
+  - 流通市值 20-100 亿（机构可介入的规模，但尚未大量布局）
+  - PE < 25，PB < 3（估值合理，存在低估空间）
+  - 近一年机构持仓比例开始小幅提升（发现初期信号）
+
+exit_conditions:
+  - 机构覆盖数量超过 15 家（信息充分传播，低覆盖优势消失）
+  - PE 达到行业均值以上（估值修复完成）
+  - 基本面出现恶化迹象
+
+execution:
+  strategy_class: dual_ma
+  strategy_params:
+    fast_period: 20
+    slow_period: 60
+
+parameters:
+  analyst_coverage_max: 5
+  roe_min: 12.0
+  profit_growth_min: 15.0
+  float_cap_range: [20.0, 100.0]
+  pe_max: 25.0
+  pb_max: 3.0
+  stop_loss_pct: 0.08
+  take_profit_pct: 0.35
+
+risk_notes: |
+  低覆盖股流动性差，买卖需分批，避免大单冲击价格。
+  冷门股信息获取难度高，需自行深度研究，不能依赖二手资讯。
+  部分低覆盖是因为行业太小或商业模式不清晰，非低估。

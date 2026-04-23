@@ -1,0 +1,62 @@
+name: analyst_upgrade
+display_name: 分析师上调评级
+description: |
+  券商分析师将目标价上调超过 20% 或评级从中性/卖出升至买入，
+  往往领先于股价上涨。筛选多家机构同时上调、
+  且股价尚未充分反映预期调整的标的。
+
+screener:
+  category: growth
+  category_color: "#4f46e5"
+  icon: thumbs-up
+  risk: 中
+  suitable: 财报季、行业景气度改善、公司战略转型被重新定价时
+  holding_period: 2-8周
+  filters:
+    min_price: 5.0
+    max_pe: 60.0
+    min_pe: 5.0
+  factor_weights:
+    quality: 8
+    momentum: 6
+    value: 5
+    value_composite: 5
+    large_cap: 4
+    pb: 3
+    liquidity: 4
+    graham: 2
+    size: 2
+    float_ratio: 1
+  top_n: 20
+
+entry_conditions:
+  - 近 30 日内至少 3 家以上券商上调目标价或评级
+  - 最新目标价中位数较当前股价溢价 > 20%（上行空间充裕）
+  - 评级上调来自头部券商（中信、中金、华泰、广发等）
+  - 股价在评级上调后 5 日内涨幅 < 10%（尚未充分反映）
+  - ROE > 10%，基本面支撑评级上调逻辑
+
+exit_conditions:
+  - 股价达到分析师目标价中位数
+  - 出现多家机构下调评级或目标价
+  - 跌破评级上调前 5 日均价
+
+execution:
+  strategy_class: dual_ma
+  strategy_params:
+    fast_period: 10
+    slow_period: 30
+
+parameters:
+  upgrade_count_min: 3
+  upgrade_window_days: 30
+  target_premium_min: 0.20
+  post_upgrade_gain_max: 0.10
+  top_broker: true
+  stop_loss_pct: 0.07
+  take_profit_pct: 0.20
+
+risk_notes: |
+  分析师研报存在利益冲突，部分上调是承销业务导致，需辨别。
+  "一致预期"上调意味着信息已充分传播，先行者已部分获利了结。
+  建议在评级上调后股价回调 3-5% 时介入，避免追高开盘价。

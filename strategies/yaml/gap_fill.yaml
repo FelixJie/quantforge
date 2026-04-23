@@ -1,0 +1,62 @@
+name: gap_fill
+display_name: 跳空缺口回补
+description: |
+  股价向上跳空并在后续走势中回调至缺口位置时买入，利用
+  "缺口必补"的市场规律。跳空缺口形成的支撑往往是良好买点。
+
+screener:
+  category: reversal
+  category_color: "#f59e0b"
+  icon: arrow-down-up
+  risk: 中
+  suitable: 震荡市、强势股回调期、缺口支撑位测试阶段
+  holding_period: 1-2周
+  filters:
+    min_price: 4.0
+    max_pe: 100.0
+    min_pe: 3.0
+  factor_weights:
+    momentum: 4
+    liquidity: 6
+    value: 4
+    quality: 5
+    size: 3
+    pb: 2
+    large_cap: 2
+    graham: 1
+    value_composite: 2
+    float_ratio: 3
+  top_n: 20
+
+entry_conditions:
+  - 近 20 日内存在明显向上跳空缺口（缺口幅度 > 2%）
+  - 股价回调至缺口上沿附近（偏离 ±1%）
+  - 回调过程成交量萎缩（量能减弱，非大规模出货）
+  - 大趋势向上（MA20 > MA60）
+  - RSI 在 40-55 区间（回调充分但未超卖）
+
+exit_conditions:
+  - 股价有效跌穿缺口下沿（缺口失守，止损）
+  - 反弹至缺口形成日前高点（目标位达到）
+  - 或持有超过 10 个交易日
+
+execution:
+  strategy_class: mean_reversion
+  strategy_params:
+    period: 10
+    std_threshold: 1.0
+
+parameters:
+  gap_min_pct: 2.0
+  gap_lookback_days: 20
+  gap_tolerance: 0.01
+  rsi_range_low: 40
+  rsi_range_high: 55
+  stop_loss_pct: 0.04
+  take_profit_pct: 0.08
+  max_hold_days: 10
+
+risk_notes: |
+  并非所有缺口都会回补，基本面恶化造成的缺口可能不补。
+  需结合基本面判断，过滤掉因负面消息形成的缺口。
+  止损位设置在缺口下沿，超过则立即止损，不可犹豫。

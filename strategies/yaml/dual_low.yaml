@@ -1,0 +1,62 @@
+name: dual_low
+display_name: 双低转债
+description: |
+  筛选价格低（低于130元）且溢价率低（低于20%）的可转债标的，
+  兼具债性保护和股权弹性，适合稳健型投资者在震荡市中配置。
+
+screener:
+  category: value
+  category_color: "#0d9488"
+  icon: shield-check
+  risk: 低中
+  suitable: 震荡市、熊市底部防御、风险偏好较低时期
+  holding_period: 1-6个月
+  filters:
+    min_price: 3.0
+    max_pe: 60.0
+    min_pe: 5.0
+  factor_weights:
+    quality: 8
+    value: 9
+    pb: 6
+    graham: 6
+    value_composite: 7
+    momentum: 1
+    liquidity: 4
+    large_cap: 3
+    size: 2
+    float_ratio: 1
+  top_n: 20
+
+entry_conditions:
+  - 对应正股 PE < 40，具备基本面支撑
+  - 正股 ROE > 8%，公司有一定盈利能力
+  - 正股股价不处于历史高位（距52周高点跌幅 < 40%）
+  - 双低值（转债价格 + 转股溢价率）低于 200（双低指标）
+  - 剩余期限 > 1 年（时间价值充裕）
+
+exit_conditions:
+  - 转债价格升至 140 元以上（债性溢价过高）
+  - 溢价率超过 40%（股权弹性大幅下降）
+  - 正股触发强制赎回条件
+
+execution:
+  strategy_class: dual_ma
+  strategy_params:
+    fast_period: 10
+    slow_period: 30
+
+parameters:
+  cb_price_max: 130.0
+  premium_rate_max: 20.0
+  dual_low_max: 200.0
+  roe_min: 8.0
+  pe_max: 40.0
+  remaining_years_min: 1.0
+  stop_loss_pct: 0.07
+  take_profit_pct: 0.20
+
+risk_notes: |
+  可转债也有违约风险，需关注发行公司资质，规避低评级品种。
+  流动性较差的小规模转债（< 5亿）买卖冲击成本高，注意流动性风险。
+  强制赎回时需及时转股或卖出，否则将按面值100元赎回损失溢价。

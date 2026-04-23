@@ -1,0 +1,61 @@
+name: macd_divergence
+display_name: MACD底背离
+description: |
+  在下跌趋势末期，当股价创新低但 MACD 柱状图未同步创新低时，
+  捕捉底背离信号。结合成交量萎缩确认底部，反转胜率较高。
+
+screener:
+  category: reversal
+  category_color: "#06b6d4"
+  icon: arrow-up-circle
+  risk: 中
+  suitable: 下跌末期、震荡底部、情绪修复行情
+  holding_period: 1-4周
+  filters:
+    min_price: 3.0
+    max_pe: 80.0
+    min_pe: 3.0
+    min_change_pct: -10.0
+  factor_weights:
+    momentum: -5
+    value: 6
+    liquidity: 5
+    size: 3
+    pb: 4
+    quality: 5
+    large_cap: 2
+    graham: 2
+    value_composite: 3
+    float_ratio: 2
+  top_n: 20
+
+entry_conditions:
+  - MACD 形成底背离：股价创近 20 日新低，但 DIF 或 MACD 柱未同步创新低
+  - RSI(14) < 40，处于弱势区间但未严重超卖
+  - 成交量较前 5 日萎缩（量能萎缩，下跌动能减弱）
+  - 股价距离 MA60 偏离不超过 -20%（未严重破位）
+  - K 线出现下影线较长的锤头线或十字星
+
+exit_conditions:
+  - MACD 金叉确认后，DIF 再度下穿 DEA
+  - 股价跌破入场价 5% 以上
+  - 持仓满 15 个交易日强制止盈止损
+
+execution:
+  strategy_class: mean_reversion
+  strategy_params:
+    period: 20
+    std_threshold: 1.5
+
+parameters:
+  macd_divergence_period: 20
+  rsi_threshold: 40
+  volume_shrink_ratio: 0.85
+  stop_loss_pct: 0.05
+  take_profit_pct: 0.15
+  max_hold_days: 15
+
+risk_notes: |
+  底背离需与其他信号共振，单一指标失效率约 40%。
+  若大盘处于主跌浪，底背离后可能继续下探，需控制仓位。
+  建议分两批建仓（各 50%），第二批等 MACD 金叉确认后加入。

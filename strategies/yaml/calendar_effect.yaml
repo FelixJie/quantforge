@@ -1,0 +1,62 @@
+name: calendar_effect
+display_name: 日历效应
+description: |
+  利用A股显著的日历效应：月初效应（每月前3日偏强）、
+  节前效应（春节/国庆前上涨概率高）、1月效应（元旦后小盘股偏强）。
+  在特定时间窗口内配置历史胜率高的品种。
+
+screener:
+  category: multi_factor
+  category_color: "#8b5cf6"
+  icon: calendar
+  risk: 中
+  suitable: 特定日历节点（月初/节前/年初/红包行情）
+  holding_period: 3-10天
+  filters:
+    min_price: 3.0
+    max_pe: 100.0
+    min_pe: 3.0
+  factor_weights:
+    momentum: 5
+    liquidity: 7
+    size: 4
+    float_ratio: 5
+    quality: 3
+    value: 2
+    pb: 1
+    large_cap: 2
+    graham: 0
+    value_composite: 2
+  top_n: 20
+
+entry_conditions:
+  - 节前效应（春节/国庆）：节前 5 个交易日买入，节后首日卖出
+  - 月初效应：每月第1-3个交易日，配置近期相对强势品种
+  - 1月效应：元旦后前2周，配置小盘成长股
+  - 红包行情（春节后）：节后首周，配置高弹性中小盘股
+  - 所选个股需近 30 日走势与市场同步或偏强（顺势品种）
+
+exit_conditions:
+  - 时间窗口结束（按各效应对应卖出节点严格执行）
+  - 节前若大盘急跌 3% 以上（节日效应失效，提前离场）
+  - 达到预设时间止损
+
+execution:
+  strategy_class: dual_ma
+  strategy_params:
+    fast_period: 5
+    slow_period: 10
+
+parameters:
+  pre_holiday_days: 5
+  month_start_days: 3
+  january_effect: true
+  red_packet_rally: true
+  stop_loss_pct: 0.04
+  take_profit_pct: 0.08
+  max_hold_days: 10
+
+risk_notes: |
+  日历效应是统计规律而非必然，每次都可能例外，需严格执行止损。
+  效应越被广泛知晓，有效性越弱（套利消除效应），需持续验证。
+  节前若市场整体偏弱，节前效应不明显，应放弃该时间窗口操作。

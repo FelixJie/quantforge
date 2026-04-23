@@ -1,0 +1,62 @@
+name: low_analyst_pe
+display_name: 低预期PE成长
+description: |
+  基于分析师一致预期的远期PE（下一财年），筛选预期PE远低于
+  当前PE的高成长股。市场往往对成长股当期利润定价，
+  而忽视其未来 1-2 年的利润增长，造成系统性低估。
+
+screener:
+  category: growth
+  category_color: "#7c3aed"
+  icon: calendar
+  risk: 中
+  suitable: 业绩高速增长期、成长股估值切换行情、年末次年展望期
+  holding_period: 1-3个月
+  filters:
+    min_price: 5.0
+    max_pe: 80.0
+    min_pe: 8.0
+  factor_weights:
+    quality: 9
+    momentum: 6
+    value: 5
+    value_composite: 5
+    pb: 2
+    large_cap: 3
+    liquidity: 4
+    size: 2
+    graham: 1
+    float_ratio: 1
+  top_n: 20
+
+entry_conditions:
+  - 当前PE(TTM) < 40（估值不极端）
+  - 分析师一致预期下一财年净利润增速 > 30%
+  - 基于预期利润计算的远期PE < 当前PE × 0.6（即预期利润增 > 60%）
+  - 至少 5 家以上机构给出盈利预测（预测可信度）
+  - 近两个季度业绩均高于市场预期（验证增长可持续）
+
+exit_conditions:
+  - 实际业绩低于一致预期 10% 以上（增速不达预期）
+  - 远期PE因股价上涨已升至 25 以上（估值切换完成）
+  - 机构下调利润预测幅度 > 15%
+
+execution:
+  strategy_class: dual_ma
+  strategy_params:
+    fast_period: 15
+    slow_period: 45
+
+parameters:
+  current_pe_max: 40.0
+  forward_growth_min: 30.0
+  forward_pe_discount: 0.60
+  analyst_count_min: 5
+  beat_estimate_quarters: 2
+  stop_loss_pct: 0.08
+  take_profit_pct: 0.30
+
+risk_notes: |
+  分析师预测误差大，高成长股的预期往往过于乐观，需打折使用。
+  "估值切换"在利率上行环境中可能失效（DCF贴现率上升打压高PE）。
+  业绩不达预期时高成长股跌幅往往超过市场，止损需执行。

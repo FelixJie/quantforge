@@ -1,0 +1,55 @@
+name: technical_reversal_composite
+display_name: 多指标共振反转
+description: |
+  RSI超卖+MACD底背离+KDJ金叉三指标共振，多重技术信号叠加，底部反转信号最强。
+
+screener:
+  category: reversal
+  category_color: "#06b6d4"
+  icon: layers
+  risk: 中
+  suitable: 调整末期、多指标共振底部
+  holding_period: 2-4周
+  filters:
+    min_price: 3.0
+    max_pe: 100.0
+  factor_weights:
+    momentum: 4
+    liquidity: 4
+    value: 2
+    pb: 1
+    quality: 1
+    size: 2
+    large_cap: 0
+    graham: 0
+    value_composite: 0
+    float_ratio: 3
+  top_n: 15
+
+entry_conditions:
+  - RSI(14) < 30（超卖区）
+  - MACD出现底背离（价格新低但MACD柱缩短）
+  - KDJ出现金叉
+  - 股价在重要均线支撑位附近
+
+exit_conditions:
+  - RSI(14) > 70（超买区）
+  - 或MACD顶背离出现
+  - 或盈利超过 15%
+  - 或亏损超过 6%
+
+execution:
+  strategy_class: mean_reversion
+  strategy_params:
+    multi_indicator: true
+    lookback: 20
+
+parameters:
+  rsi_oversold: 30
+  use_macd_divergence: true
+  use_kdj_golden_cross: true
+  stop_loss_pct: 0.06
+  take_profit_pct: 0.15
+
+risk_notes: |
+  多指标共振信号出现频率低，一旦出现信号质量高，可适当提高仓位。需排除趋势性下跌股。

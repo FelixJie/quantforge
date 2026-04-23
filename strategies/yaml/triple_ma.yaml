@@ -1,0 +1,53 @@
+name: triple_ma
+display_name: 三线多头排列
+description: |
+  MA5>MA10>MA20同时满足多头排列，且三线向上发散，确认趋势延续性最强。
+
+screener:
+  category: momentum
+  category_color: "#f59e0b"
+  icon: trending-up
+  risk: 中
+  suitable: 趋势确立后的持续上涨段
+  holding_period: 2-6周
+  filters:
+    min_price: 4.0
+    max_pe: 120.0
+  factor_weights:
+    momentum: 8
+    liquidity: 3
+    value: 1
+    pb: 0
+    quality: 1
+    size: 2
+    large_cap: 0
+    graham: 0
+    value_composite: 0
+    float_ratio: 1
+  top_n: 25
+
+entry_conditions:
+  - MA5 > MA10 > MA20 三线多头排列
+  - 三条均线均向上倾斜
+  - 收盘价在 MA5 上方
+  - 成交量较5日均量温和放大
+
+exit_conditions:
+  - MA5 下穿 MA10
+  - 或收盘价跌破 MA20
+  - 或盈利超过 15%
+  - 或亏损超过 6%
+
+execution:
+  strategy_class: dual_ma
+  strategy_params:
+    fast_period: 5
+    slow_period: 20
+
+parameters:
+  ma_periods: [5, 10, 20]
+  stop_loss_pct: 0.06
+  take_profit_pct: 0.15
+
+risk_notes: |
+  三线多头排列是滞后信号，追入时注意是否已经过度上涨，结合回调介入更安全。

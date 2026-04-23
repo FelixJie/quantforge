@@ -1,0 +1,61 @@
+name: spinoff_listing
+display_name: 分拆子公司上市
+description: |
+  母公司将优质子公司分拆单独上市，母公司股价往往出现"分拆折价"。
+  分拆完成后，母公司持有子公司股权的市值往往被低估，
+  存在价值重估机会；子公司上市后同样值得关注。
+
+screener:
+  category: value
+  category_color: "#0369a1"
+  icon: git-branch
+  risk: 中
+  suitable: 分拆上市审批通过至完成期间、子公司上市后的价值重估
+  holding_period: 1-3个月
+  filters:
+    min_price: 4.0
+    max_pe: 60.0
+    min_pe: 3.0
+  factor_weights:
+    quality: 7
+    value: 7
+    value_composite: 5
+    pb: 4
+    graham: 3
+    momentum: 4
+    size: 3
+    liquidity: 4
+    large_cap: 3
+    float_ratio: 2
+  top_n: 15
+
+entry_conditions:
+  - 近 90 日内发布分拆子公司上市预案并获证监会受理
+  - 子公司盈利能力优于母公司整体（分拆后母公司质量不降）
+  - 母公司市值 < 持股子公司市值 × 持股比例 × 1.3（存在折价）
+  - 母公司自身 PE < 20，PB < 2（排除母公司本身高估）
+  - 分拆完成后子公司上市价格合理（无严重高估溢价）
+
+exit_conditions:
+  - 子公司上市满 3 个月，母公司折价消除
+  - 子公司市值大幅缩水至低于预期（分拆逻辑破坏）
+  - 监管否决分拆申请
+
+execution:
+  strategy_class: dual_ma
+  strategy_params:
+    fast_period: 15
+    slow_period: 45
+
+parameters:
+  spinoff_window_days: 90
+  parent_discount_min: 1.30
+  parent_pe_max: 20.0
+  parent_pb_max: 2.0
+  stop_loss_pct: 0.08
+  take_profit_pct: 0.25
+
+risk_notes: |
+  分拆审批周期长且不确定，存在政策变化导致分拆失败的风险。
+  分拆后母公司失去核心资产，整体竞争力可能下降，需重新评估。
+  子公司上市后锁定期结束，母公司可能大量减持，形成抛压。

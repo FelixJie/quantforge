@@ -1,0 +1,55 @@
+name: cash_flow_positive
+display_name: 经营现金流强劲
+description: |
+  经营现金流/净利润>120%，利润含金量高，排除应收款虚增利润的陷阱。
+
+screener:
+  category: quality
+  category_color: "#22c55e"
+  icon: dollar-sign
+  risk: 低
+  suitable: 价值选股、熊市防御
+  holding_period: 3-12个月
+  filters:
+    min_price: 3.0
+    max_pe: 50.0
+    min_pe: 5.0
+  factor_weights:
+    momentum: 1
+    liquidity: 2
+    value: 4
+    pb: 2
+    quality: 8
+    size: 0
+    large_cap: 2
+    graham: 0
+    value_composite: 1
+    float_ratio: 0
+  top_n: 20
+
+entry_conditions:
+  - 经营现金流/净利润 > 1.2
+  - 近3年均保持正向经营现金流
+  - 应收账款占营收比例<20%
+  - ROE > 12%
+
+exit_conditions:
+  - 经营现金流出现明显下滑
+  - 或应收账款大幅增加（利润质量恶化）
+  - 或盈利超过 25%
+  - 或亏损超过 8%
+
+execution:
+  strategy_class: factor_ranking
+  strategy_params:
+    primary_factor: cash_flow_quality
+
+parameters:
+  min_cf_to_profit: 1.2
+  max_ar_ratio: 0.20
+  min_roe: 0.12
+  stop_loss_pct: 0.08
+  take_profit_pct: 0.25
+
+risk_notes: |
+  重资产行业（地产/建筑）天然现金流模式不同，需行业内横向比较而非跨行业比较。

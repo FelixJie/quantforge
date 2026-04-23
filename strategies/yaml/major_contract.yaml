@@ -1,0 +1,53 @@
+name: major_contract
+display_name: 重大合同公告
+description: |
+  公司公告重大合同（合同金额>公司年营收20%），短期催化剂明确，股价往往有超额反应。
+
+screener:
+  category: multi_factor
+  category_color: "#8b5cf6"
+  icon: file-text
+  risk: 中高
+  suitable: 事件驱动、消息面催化
+  holding_period: 1-3周
+  filters:
+    min_price: 3.0
+    max_pe: 150.0
+  factor_weights:
+    momentum: 5
+    liquidity: 4
+    value: 2
+    pb: 0
+    quality: 1
+    size: 2
+    large_cap: 0
+    graham: 0
+    value_composite: 0
+    float_ratio: 3
+  top_n: 15
+
+entry_conditions:
+  - 公告重大合同且合同金额>年营收20%
+  - 合同来自优质客户（央企/上市公司/海外）
+  - 公告后次日未大幅高开（溢价<5%）
+  - 公司技术壁垒强，订单可执行性高
+
+exit_conditions:
+  - 合同执行出现负面公告
+  - 或股价已充分反应（连涨3日+超10%）
+  - 或盈利超过 15%
+  - 或亏损超过 6%
+
+execution:
+  strategy_class: event_driven
+  strategy_params:
+    event_type: major_contract
+
+parameters:
+  contract_revenue_ratio: 0.20
+  max_open_premium: 0.05
+  stop_loss_pct: 0.06
+  take_profit_pct: 0.15
+
+risk_notes: |
+  需仔细阅读公告原文，注意合同是否有条件、是否已确定。短期消息炒作过后需及时获利了结。

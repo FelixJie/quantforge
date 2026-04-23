@@ -1,0 +1,63 @@
+name: dragon_lead
+display_name: 龙头效应追踪
+description: |
+  板块轮动中率先启动的龙头股具有持续领涨效应。
+  筛选率先创板块新高、换手率居板块首位、机构跟进的真龙头，
+  在板块行情中期介入，享受龙头溢价。
+
+screener:
+  category: momentum
+  category_color: "#dc2626"
+  icon: award
+  risk: 中高
+  suitable: 板块行情启动期、热点爆发阶段、强势股轮动
+  holding_period: 1-2周
+  filters:
+    min_price: 3.0
+    max_pe: 200.0
+    min_pe: 2.0
+    min_change_pct: 3.0
+  factor_weights:
+    momentum: 10
+    liquidity: 8
+    float_ratio: 5
+    size: 3
+    quality: 2
+    value: 1
+    pb: 0
+    large_cap: 1
+    graham: 0
+    value_composite: 0
+  top_n: 10
+
+entry_conditions:
+  - 近 5 日涨幅领先所属板块内个股排名前 20%
+  - 在板块内率先突破近 20 日高点（龙头先行）
+  - 近 3 日换手率 > 板块均值的 1.5 倍（资金集中流入）
+  - 股价涨幅不超过 30%（板块启动初中期，非末期追高）
+  - 近一年营收增速 > 10%，有基本面支撑（非纯概念龙头）
+
+exit_conditions:
+  - 板块内出现更强的新龙头（资金转移，原龙头弱化）
+  - 换手率骤降至板块均值以下（主力撤离）
+  - 跌幅超过龙头启动价的 8%
+
+execution:
+  strategy_class: bollinger_breakout
+  strategy_params:
+    period: 20
+    std_dev: 2.0
+
+parameters:
+  sector_rank_pct: 0.20
+  turnover_vs_sector: 1.5
+  max_gain_before_entry: 0.30
+  revenue_growth_min: 10.0
+  stop_loss_pct: 0.08
+  take_profit_pct: 0.20
+  max_hold_days: 10
+
+risk_notes: |
+  龙头效应真实，但识别真假龙头是难点——许多个股只是昙花一现。
+  龙头股高位回落往往比普通股更快速猛烈，需快速止损。
+  同一板块龙头最多持有 1-2 只，避免集中风险。

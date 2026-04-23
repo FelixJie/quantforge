@@ -1,0 +1,63 @@
+name: engulfing_bottom
+display_name: 底部吞没形态
+description: |
+  下跌趋势中出现阳线实体完全覆盖前一日阴线（看涨吞没），
+  配合超卖区域和缩量，是短期底部反转的高胜率信号。
+  单日形态信号，需快速执行。
+
+screener:
+  category: reversal
+  category_color: "#16a34a"
+  icon: sun
+  risk: 中
+  suitable: 短期超跌后的技术反弹、恐慌盘释放后的情绪修复
+  holding_period: 3-10天
+  filters:
+    min_price: 3.0
+    max_pe: 100.0
+    min_pe: 3.0
+    min_change_pct: -6.0
+  factor_weights:
+    momentum: -3
+    value: 5
+    quality: 5
+    liquidity: 7
+    size: 3
+    pb: 3
+    large_cap: 3
+    graham: 2
+    value_composite: 3
+    float_ratio: 2
+  top_n: 15
+
+entry_conditions:
+  - 前一日为阴线（收盘 < 开盘）
+  - 当日阳线开盘低于前日收盘，收盘高于前日开盘（实体完全吞没）
+  - 吞没阳线实体幅度 > 2%（信号强度足够）
+  - 近 5 日累计跌幅 > 8%（有超跌基础）
+  - RSI(14) < 40，处于超卖区间
+  - 成交量相对前日萎缩或持平（非恐慌性抛售日出现吞没）
+
+exit_conditions:
+  - 持有 3 日后若无法续涨则离场（动能不足）
+  - 跌破吞没阳线开盘价（形态失效）
+  - 涨幅达到 8% 止盈
+
+execution:
+  strategy_class: mean_reversion
+  strategy_params:
+    period: 10
+    std_threshold: 1.5
+
+parameters:
+  engulf_min_pct: 2.0
+  prior_drop_min: 8.0
+  rsi_oversold: 40
+  stop_loss_pct: 0.04
+  take_profit_pct: 0.08
+  max_hold_days: 10
+
+risk_notes: |
+  吞没形态出现在下跌趋势中胜率约60%，需配合其他信号提高胜率。
+  单日K线形态主观性强，建议结合量化指标过滤，避免误判。
+  注意区分"真吞没"（实体完全覆盖）与"近似吞没"，严格标准执行。

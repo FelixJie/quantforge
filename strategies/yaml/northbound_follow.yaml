@@ -1,0 +1,61 @@
+name: northbound_follow
+display_name: 北向资金跟踪
+description: |
+  跟踪沪深港通北向资金连续净买入的个股，结合技术面信号确认入场。
+  外资持续增持往往预示着价值认可，适合中长线布局。
+
+screener:
+  category: value
+  category_color: "#0ea5e9"
+  icon: globe
+  risk: 低中
+  suitable: 外资回流期、A股国际化深化阶段、人民币升值周期
+  holding_period: 1-3个月
+  filters:
+    min_price: 5.0
+    max_pe: 40.0
+    min_pe: 5.0
+    max_pb: 5.0
+  factor_weights:
+    quality: 8
+    large_cap: 7
+    value: 6
+    value_composite: 5
+    momentum: 3
+    pb: 4
+    graham: 3
+    liquidity: 5
+    size: 2
+    float_ratio: 1
+  top_n: 20
+
+entry_conditions:
+  - 北向资金连续 5 个交易日净买入
+  - 北向持股比例环比上升超过 0.5 个百分点
+  - 沪深300 或 MSCI 成分股（机构偏好标的）
+  - ROE > 12%，PE < 35，满足外资价值偏好
+  - 股价未处于近 52 周高位（偏离 < 15%）
+
+exit_conditions:
+  - 北向资金连续 3 日净流出
+  - 北向持股比例下降超过 1 个百分点
+  - 股价跌破 MA60
+
+execution:
+  strategy_class: dual_ma
+  strategy_params:
+    fast_period: 20
+    slow_period: 60
+
+parameters:
+  northbound_days: 5
+  northbound_ratio_change: 0.005
+  roe_min: 12.0
+  pe_max: 35.0
+  stop_loss_pct: 0.08
+  take_profit_pct: 0.25
+
+risk_notes: |
+  北向资金数据有 T+1 延迟，无法实时跟踪。
+  外资在市场极端波动时也会大幅撤离，需同步关注汇率和海外风险。
+  建议配置蓝筹大盘股为主，避免跟踪外资配置比例极低的小盘股。

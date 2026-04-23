@@ -1,0 +1,61 @@
+name: ipo_lock_expiry
+display_name: 解禁后布局
+description: |
+  大股东解禁期过后 1-2 个月，若股价企稳回升、抛压消化完毕，
+  往往迎来估值修复机会。寻找基本面优良但因解禁压制的错杀标的。
+
+screener:
+  category: value
+  category_color: "#6366f1"
+  icon: unlock
+  risk: 中
+  suitable: 解禁压力消化期、次新股修复阶段、市场情绪平稳期
+  holding_period: 1-3个月
+  filters:
+    min_price: 4.0
+    max_pe: 80.0
+    min_pe: 5.0
+  factor_weights:
+    value: 8
+    quality: 7
+    value_composite: 5
+    pb: 4
+    graham: 3
+    momentum: 2
+    liquidity: 4
+    size: 3
+    large_cap: 2
+    float_ratio: 2
+  top_n: 15
+
+entry_conditions:
+  - 大股东解禁后 20-60 个交易日（抛压高峰已过）
+  - 解禁后股价较解禁日最低点回升超过 5%（止跌企稳）
+  - 近 10 日成交量持续萎缩（解禁抛售结束）
+  - 公司 ROE > 12%，净利润增速 > 15%（解禁前基本面良好）
+  - PE 低于同行业均值（因解禁造成错杀）
+
+exit_conditions:
+  - 估值修复至行业均值水平
+  - 再次出现大规模减持公告
+  - 跌破解禁后最低价
+
+execution:
+  strategy_class: dual_ma
+  strategy_params:
+    fast_period: 10
+    slow_period: 30
+
+parameters:
+  post_unlock_days_min: 20
+  post_unlock_days_max: 60
+  rebound_from_low: 0.05
+  roe_min: 12.0
+  profit_growth_min: 15.0
+  stop_loss_pct: 0.08
+  take_profit_pct: 0.20
+
+risk_notes: |
+  解禁后反弹策略前提是公司基本面良好，纯靠概念支撑的不适用。
+  部分解禁期较长（1年+），需关注后续还有多少解禁批次。
+  避免在熊市整体下行趋势中使用，个股反弹空间会被大盘压制。

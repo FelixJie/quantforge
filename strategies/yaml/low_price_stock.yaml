@@ -1,0 +1,54 @@
+name: low_price_stock
+display_name: 低价股弹性策略
+description: |
+  股价低于5元的低价股，弹性大，配合基本面改善信号，小资金撬动大弹性。
+
+screener:
+  category: reversal
+  category_color: "#06b6d4"
+  icon: tag
+  risk: 高
+  suitable: 牛市初期、普涨行情
+  holding_period: 1-4周
+  filters:
+    min_price: 1.5
+    max_price: 5.0
+    max_pe: 100.0
+  factor_weights:
+    momentum: 5
+    liquidity: 4
+    value: 2
+    pb: 1
+    quality: 1
+    size: 3
+    large_cap: 0
+    graham: 0
+    value_composite: 0
+    float_ratio: 4
+  top_n: 20
+
+entry_conditions:
+  - 股价在2-5元区间
+  - 非ST类股票
+  - 业绩亏损已连续改善或扭亏信号
+  - 换手率开始放大但未爆量
+
+exit_conditions:
+  - 股价涨至目标区间（入场价的1.2倍）
+  - 或成交量异常放大后出现阴线
+  - 或盈利超过 20%
+  - 或亏损超过 7%
+
+execution:
+  strategy_class: momentum_breakout
+  strategy_params:
+    price_range: [1.5, 5.0]
+
+parameters:
+  max_price: 5.0
+  min_price: 1.5
+  stop_loss_pct: 0.07
+  take_profit_pct: 0.20
+
+risk_notes: |
+  低价股流动性差，大资金不适合，散户博弈性强，需严格控制仓位和止损。

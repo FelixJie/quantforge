@@ -1,0 +1,64 @@
+name: quality_momentum
+display_name: 质量动量双因子
+description: |
+  同时满足高质量（ROE > 15%、低负债）和强动量（近半年跑赢市场）
+  的双因子组合。质量确保安全边际，动量确保入场时机，
+  历史上该组合风险调整收益显著优于单一因子。
+
+screener:
+  category: quality
+  category_color: "#22c55e"
+  icon: award
+  risk: 低中
+  suitable: 任何市场环境均适用，尤其是机构主导的价值成长行情
+  holding_period: 1-3个月
+  filters:
+    min_price: 5.0
+    max_pe: 50.0
+    min_pe: 5.0
+    max_pb: 5.0
+  factor_weights:
+    quality: 9
+    momentum: 8
+    value: 4
+    value_composite: 4
+    pb: 3
+    large_cap: 3
+    liquidity: 4
+    size: 1
+    graham: 2
+    float_ratio: 1
+  top_n: 20
+
+entry_conditions:
+  - ROE(TTM) > 15%，连续 3 年稳定（质量因子核心条件）
+  - 资产负债率 < 50%（财务稳健，低杠杆风险）
+  - 近 6 个月相对沪深300超额收益 > 5%（动量因子核心条件）
+  - 净利润增速 > 10%，毛利率近两年无明显下滑
+  - 机构持仓比例 > 15%（具备机构认可基础）
+
+exit_conditions:
+  - ROE 连续两季度下滑至 12% 以下（质量恶化）
+  - 近 3 个月相对市场跑输 8% 以上（动量破坏）
+  - 跌破 MA60，长期趋势反转
+
+execution:
+  strategy_class: dual_ma
+  strategy_params:
+    fast_period: 20
+    slow_period: 60
+
+parameters:
+  roe_min: 15.0
+  roe_stable_years: 3
+  debt_ratio_max: 50.0
+  relative_return_6m: 0.05
+  profit_growth_min: 10.0
+  institution_pct_min: 15.0
+  stop_loss_pct: 0.08
+  take_profit_pct: 0.25
+
+risk_notes: |
+  质量+动量组合在风格切换初期（如从成长切价值）会有短期跑输。
+  动量因子具有拥挤效应，当所有人都追质量动量时，拥挤风险上升。
+  建议每季度再平衡一次，剔除质量下滑或动量减弱的个股。

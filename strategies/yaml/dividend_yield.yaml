@@ -1,0 +1,62 @@
+name: dividend_yield
+display_name: 高股息防御
+description: |
+  筛选股息率 > 4%、连续 5 年分红、负债率合理的高股息蓝筹股。
+  适合熊市防御和稳健型投资者，以股息现金流对抗市场波动。
+
+screener:
+  category: value
+  category_color: "#84cc16"
+  icon: shield
+  risk: 低
+  suitable: 熊市防御、震荡筑底、利率下行周期、稳健型配置
+  holding_period: 3个月-1年
+  filters:
+    min_price: 3.0
+    max_pe: 25.0
+    min_pe: 5.0
+    max_pb: 3.0
+  factor_weights:
+    quality: 8
+    value: 10
+    large_cap: 8
+    graham: 6
+    value_composite: 6
+    pb: 5
+    momentum: 1
+    liquidity: 4
+    size: 1
+    float_ratio: 1
+  top_n: 20
+
+entry_conditions:
+  - 近一年股息率 > 4%（现金分红/股价）
+  - 连续 5 年分红且分红比例稳定（派息率 > 40%）
+  - 资产负债率 < 60%（银行除外）
+  - ROE > 8%，盈利稳定
+  - 股价处于近 1 年相对低位（股息率因股价下跌而提升，性价比更高）
+
+exit_conditions:
+  - 股息率因股价上涨降至 2.5% 以下（估值修复完成）
+  - 公司宣布大幅削减或取消分红
+  - 基本面恶化：净利润下滑超过 20%
+
+execution:
+  strategy_class: dual_ma
+  strategy_params:
+    fast_period: 20
+    slow_period: 60
+
+parameters:
+  dividend_yield_min: 4.0
+  consecutive_dividend_years: 5
+  payout_ratio_min: 40.0
+  debt_ratio_max: 60.0
+  roe_min: 8.0
+  stop_loss_pct: 0.10
+  take_profit_pct: 0.30
+
+risk_notes: |
+  高股息股并非零风险，利率上升时高股息股吸引力下降。
+  部分高股息来自一次性收益，需确认分红来源于经营性利润。
+  银行、地产等行业需额外关注政策和资产质量风险。

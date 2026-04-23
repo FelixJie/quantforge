@@ -1,0 +1,53 @@
+name: ai_semiconductor
+display_name: AI芯片算力主题
+description: |
+  AI大模型驱动算力需求爆发，筛选GPU/算力/存储/封测产业链的核心受益标的。
+
+screener:
+  category: growth
+  category_color: "#a855f7"
+  icon: cpu
+  risk: 高
+  suitable: AI主题行情、科技板块牛市
+  holding_period: 2-6周
+  filters:
+    min_price: 5.0
+    max_pe: 300.0
+    min_pe: 15.0
+  factor_weights:
+    momentum: 7
+    liquidity: 3
+    value: 0
+    pb: 0
+    quality: 3
+    size: 2
+    large_cap: 0
+    graham: 0
+    value_composite: 0
+    float_ratio: 3
+  top_n: 15
+
+entry_conditions:
+  - AI算力相关收入占比>30%或快速增长
+  - 有具体大模型/云厂商客户合作披露
+  - 技术壁垒明确（IP/制程/封装独特性）
+  - 市场热度持续（北向资金+机构关注）
+
+exit_conditions:
+  - AI行业景气度出现明显下行信号
+  - 或核心客户集中度风险暴露
+  - 或盈利超过 40%
+  - 或亏损超过 12%
+
+execution:
+  strategy_class: theme_momentum
+  strategy_params:
+    theme: ai_chips
+
+parameters:
+  min_ai_revenue_ratio: 0.30
+  stop_loss_pct: 0.12
+  take_profit_pct: 0.40
+
+risk_notes: |
+  AI主题估值极高，情绪驱动明显，需严格止损，不适合重仓持有。

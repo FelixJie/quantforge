@@ -1,0 +1,60 @@
+name: turnaround
+display_name: 困境反转
+description: |
+  寻找基本面正在改善的困境股：连续亏损后首次盈利、或业绩
+  从大幅下滑转为改善的拐点标的。困境反转往往带来数倍涨幅。
+
+screener:
+  category: value
+  category_color: "#ea580c"
+  icon: trending-up
+  risk: 高
+  suitable: 经济复苏初期、行业供给出清后、公司重组改革完成后
+  holding_period: 2-6个月
+  filters:
+    min_price: 2.0
+    max_pe: 200.0
+    min_pe: 0.0
+  factor_weights:
+    quality: 6
+    value: 5
+    momentum: 4
+    value_composite: 4
+    pb: 5
+    graham: 3
+    liquidity: 5
+    size: 4
+    large_cap: 2
+    float_ratio: 3
+  top_n: 15
+
+entry_conditions:
+  - 最新季报净利润同比转正（去年同期亏损，今年盈利）
+  - 或净利润增速从 -50% 以上改善至 -10% 以内（拐点确认）
+  - 资产负债率 < 70%（不会在反转前就破产）
+  - 行业景气度有所回升（非公司个体改善，系统性修复）
+  - 股价较历史高点跌幅 > 50%（低位布局，安全边际足够）
+
+exit_conditions:
+  - 困境彻底改善，PE 升至 30 以上（不再是困境股）
+  - 业绩改善被证伪（下季度再次大幅亏损）
+  - 跌破近 60 日最低价
+
+execution:
+  strategy_class: dual_ma
+  strategy_params:
+    fast_period: 20
+    slow_period: 60
+
+parameters:
+  turnaround_required: true
+  debt_ratio_max: 70.0
+  drawdown_from_high: 0.50
+  stop_loss_pct: 0.12
+  take_profit_pct: 0.50
+  max_hold_days: 120
+
+risk_notes: |
+  困境反转是高风险高回报策略，失败率约 50%，仓位需严格控制。
+  部分困境公司是系统性问题，无法真正反转，需深入研究行业基本面。
+  分批建仓为主：初次仓位不超过计划仓位的 30%，等拐点确认后加仓。

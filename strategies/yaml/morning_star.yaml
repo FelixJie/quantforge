@@ -1,0 +1,62 @@
+name: morning_star
+display_name: 早晨之星形态
+description: |
+  经典 K 线形态策略：连续下跌后出现"大阴线+小实体十字星+大阳线"
+  三日组合，配合成交量和技术指标确认，捕捉底部反转信号。
+
+screener:
+  category: reversal
+  category_color: "#fbbf24"
+  icon: sun
+  risk: 中
+  suitable: 调整末期、恐慌情绪峰值后、底部区域形态确认
+  holding_period: 1-3周
+  filters:
+    min_price: 3.0
+    max_pe: 80.0
+    min_pe: 3.0
+  factor_weights:
+    momentum: -4
+    value: 6
+    quality: 5
+    liquidity: 6
+    size: 3
+    pb: 3
+    large_cap: 3
+    graham: 2
+    value_composite: 3
+    float_ratio: 3
+  top_n: 15
+
+entry_conditions:
+  - 前一日大阴线（跌幅 > 3%）
+  - 当日开低，形成小实体 K 线（实体幅度 < 1%）或十字星
+  - 次日大阳线（涨幅 > 3%），且收盘价高于第一日阴线实体中点
+  - 形态确认日成交量 > 前 5 日均量
+  - RSI(14) 在形态低点时低于 35（超卖区间）
+
+exit_conditions:
+  - 股价跌破形态最低点（早晨之星失效）
+  - 反弹至形成早晨之星前的下跌起点（阻力位）
+  - 持有满 15 个交易日
+
+execution:
+  strategy_class: mean_reversion
+  strategy_params:
+    period: 14
+    std_threshold: 2.0
+
+parameters:
+  shadow_candle_drop_min: 3.0
+  doji_body_max: 1.0
+  confirmation_rise_min: 3.0
+  volume_ratio: 1.0
+  rsi_threshold: 35
+  stop_loss_pct: 0.05
+  take_profit_pct: 0.12
+  max_hold_days: 15
+
+risk_notes: |
+  单一 K 线形态信号成功率约 55%，需多指标共振提高胜率。
+  在高位出现早晨之星形态意义较弱，只在明显下跌后的低位有效。
+  形态识别存在主观判断，建议设定严格的量化标准而非感性识别。

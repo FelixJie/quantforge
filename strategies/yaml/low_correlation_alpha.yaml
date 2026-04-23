@@ -1,0 +1,55 @@
+name: low_correlation_alpha
+display_name: 低相关性阿尔法
+description: |
+  筛选与大盘相关性低（Beta<0.6）但独立上涨的个股，纯阿尔法收益不受系统性风险影响。
+
+screener:
+  category: defensive
+  category_color: "#64748b"
+  icon: minus-circle
+  risk: 低中
+  suitable: 熊市防御、震荡市独立行情
+  holding_period: 2-8周
+  filters:
+    min_price: 3.0
+    max_pe: 80.0
+    min_market_cap: 30.0
+  factor_weights:
+    momentum: 4
+    liquidity: 3
+    value: 3
+    pb: 1
+    quality: 3
+    size: 1
+    large_cap: 0
+    graham: 0
+    value_composite: 0
+    float_ratio: 1
+  top_n: 20
+
+entry_conditions:
+  - 近60日Beta < 0.6（低与大盘相关性）
+  - 近20日个股跑赢大盘5%以上
+  - 有明确独立上涨逻辑（业绩/产品/政策）
+  - 机构已开始关注但持仓比例<30%
+
+exit_conditions:
+  - Beta上升至1.0以上（开始与市场同步）
+  - 或独立上涨逻辑消失
+  - 或盈利超过 15%
+  - 或亏损超过 7%
+
+execution:
+  strategy_class: factor_ranking
+  strategy_params:
+    primary_factor: alpha
+
+parameters:
+  max_beta: 0.6
+  min_alpha_period: 20
+  min_alpha_pct: 0.05
+  stop_loss_pct: 0.07
+  take_profit_pct: 0.15
+
+risk_notes: |
+  低Beta股票在牛市中跑输指数，需根据市场阶段动态调整策略配比。

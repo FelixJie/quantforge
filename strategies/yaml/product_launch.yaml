@@ -1,0 +1,51 @@
+name: product_launch
+display_name: 新产品发布催化
+description: |
+  公司发布重磅新产品或技术，市场尚未充分定价，短期催化明确，适合事件驱动交易。
+
+screener:
+  category: growth
+  category_color: "#a855f7"
+  icon: box
+  risk: 中高
+  suitable: 科技/消费品发布会行情
+  holding_period: 1-3周
+  filters:
+    min_price: 5.0
+    max_pe: 200.0
+  factor_weights:
+    momentum: 6
+    liquidity: 4
+    value: 0
+    pb: 0
+    quality: 3
+    size: 2
+    large_cap: 0
+    graham: 0
+    value_composite: 0
+    float_ratio: 3
+  top_n: 15
+
+entry_conditions:
+  - 公司公告重大新产品发布计划
+  - 产品属于蓝海市场或技术领先
+  - 股价尚未大幅上涨（消息发布前入场）
+  - 行业分析师对新产品前景积极评价
+
+exit_conditions:
+  - 产品正式发布且市场反应已充分定价
+  - 或竞争对手发布更好替代产品
+  - 或盈利超过 12%
+  - 或亏损超过 6%
+
+execution:
+  strategy_class: event_driven
+  strategy_params:
+    event_type: product_launch
+
+parameters:
+  stop_loss_pct: 0.06
+  take_profit_pct: 0.12
+
+risk_notes: |
+  新产品发布"买预期卖事实"规律明显，发布当天往往是最佳卖出时机。

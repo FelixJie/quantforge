@@ -1,0 +1,59 @@
+name: etf_arbitrage
+display_name: ETF成分套利
+description: |
+  当 ETF 成分股因大量申赎造成价格偏离时，买入折价个股、
+  做多 ETF 或反向操作，捕捉成分股与 ETF 之间的价格回归机会。
+
+screener:
+  category: value
+  category_color: "#059669"
+  icon: layers
+  risk: 低中
+  suitable: 任何市场环境，尤其是 ETF 资金大进出期
+  holding_period: 1-5天
+  filters:
+    min_price: 5.0
+    max_pe: 40.0
+    min_pe: 5.0
+  factor_weights:
+    large_cap: 10
+    liquidity: 10
+    quality: 6
+    value: 5
+    value_composite: 4
+    pb: 3
+    momentum: 2
+    size: 0
+    graham: 2
+    float_ratio: 0
+  top_n: 20
+
+entry_conditions:
+  - 沪深300 或 中证500 ETF 成分股（流动性高）
+  - 个股日内相对 ETF 折价超过 1.5%（价格偏离机会出现）
+  - 偏离原因为 ETF 大量申购导致，而非个股基本面变化
+  - 日均成交量大（个股流动性好，便于快速建仓和平仓）
+  - 大盘环境稳定（非极端波动期，回归时间可预期）
+
+exit_conditions:
+  - 个股价格回归 ETF 隐含净值（套利完成）
+  - 持有超过 5 个交易日（时间止损）
+  - 折价扩大超过 3%（方向判断错误，止损）
+
+execution:
+  strategy_class: mean_reversion
+  strategy_params:
+    period: 5
+    std_threshold: 1.5
+
+parameters:
+  discount_trigger_pct: 1.5
+  etf_component: true
+  stop_loss_pct: 0.03
+  take_profit_pct: 0.015
+  max_hold_days: 5
+
+risk_notes: |
+  ETF套利需要对 ETF 机制（申赎、折溢价）有深入理解。
+  套利空间通常很小（1-2%），需要较大资金量才有实际意义。
+  T+1 限制下，ETF 套利窗口短暂，需要快速执行。

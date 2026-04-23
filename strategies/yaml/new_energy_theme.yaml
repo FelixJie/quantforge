@@ -1,0 +1,53 @@
+name: new_energy_theme
+display_name: 新能源主题
+description: |
+  政策支持力度持续，光伏/储能/新能源车产业链中具备技术壁垒的核心标的。
+
+screener:
+  category: growth
+  category_color: "#a855f7"
+  icon: zap
+  risk: 中高
+  suitable: 政策催化期、碳中和主题行情
+  holding_period: 1-3个月
+  filters:
+    min_price: 5.0
+    max_pe: 150.0
+    min_pe: 10.0
+  factor_weights:
+    momentum: 5
+    liquidity: 3
+    value: 1
+    pb: 0
+    quality: 4
+    size: 2
+    large_cap: 0
+    graham: 0
+    value_composite: 0
+    float_ratio: 2
+  top_n: 20
+
+entry_conditions:
+  - 新能源行业政策利好出台
+  - 公司在光伏/储能/电动车产业链中有核心技术
+  - 订单/出货量同比增长>30%
+  - 机构近期调研且有增持动作
+
+exit_conditions:
+  - 政策支持力度减弱或补贴退坡
+  - 或行业产能过剩信号出现
+  - 或盈利超过 30%
+  - 或亏损超过 10%
+
+execution:
+  strategy_class: theme_momentum
+  strategy_params:
+    theme: new_energy
+
+parameters:
+  min_revenue_growth: 0.30
+  stop_loss_pct: 0.10
+  take_profit_pct: 0.30
+
+risk_notes: |
+  新能源板块估值敏感，政策和利率变化均有较大影响，高波动需严格控制仓位。

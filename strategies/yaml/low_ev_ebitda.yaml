@@ -1,0 +1,54 @@
+name: low_ev_ebitda
+display_name: EV/EBITDA低估值
+description: |
+  EV/EBITDA综合考虑债务结构，比PE更全面反映企业真实价值，筛选低于行业中位数的标的。
+
+screener:
+  category: value
+  category_color: "#3b82f6"
+  icon: layers
+  risk: 低中
+  suitable: 价值投资、行业低估期
+  holding_period: 3-12个月
+  filters:
+    min_price: 3.0
+    max_pe: 40.0
+    min_pe: 3.0
+  factor_weights:
+    momentum: 1
+    liquidity: 2
+    value: 7
+    pb: 2
+    quality: 3
+    size: 0
+    large_cap: 2
+    graham: 1
+    value_composite: 2
+    float_ratio: 0
+  top_n: 25
+
+entry_conditions:
+  - EV/EBITDA低于行业均值30%以上
+  - EBITDA近三年保持正值且稳定增长
+  - 净债务/EBITDA < 3倍
+  - 行业景气度处于底部回升阶段
+
+exit_conditions:
+  - EV/EBITDA回升至行业平均以上
+  - 或EBITDA大幅下滑
+  - 或盈利超过 25%
+  - 或亏损超过 10%
+
+execution:
+  strategy_class: factor_ranking
+  strategy_params:
+    primary_factor: ev_ebitda
+
+parameters:
+  ev_ebitda_discount: 0.30
+  max_net_debt_ebitda: 3.0
+  stop_loss_pct: 0.10
+  take_profit_pct: 0.25
+
+risk_notes: |
+  周期行业EBITDA波动大，需结合行业周期判断，避免价值陷阱。

@@ -1,0 +1,53 @@
+name: adx_trend
+display_name: ADX强趋势跟随
+description: |
+  ADX>25表明趋势强劲，+DI>-DI时做多。过滤震荡市假信号，只在真实趋势中交易。
+
+screener:
+  category: momentum
+  category_color: "#f59e0b"
+  icon: trending-up
+  risk: 中
+  suitable: 单边趋势行情、板块主升浪
+  holding_period: 3-8周
+  filters:
+    min_price: 5.0
+    max_pe: 150.0
+  factor_weights:
+    momentum: 9
+    liquidity: 3
+    value: 0
+    pb: 0
+    quality: 1
+    size: 1
+    large_cap: 0
+    graham: 0
+    value_composite: 0
+    float_ratio: 2
+  top_n: 20
+
+entry_conditions:
+  - ADX(14) > 25 且处于上升趋势
+  - +DI > -DI（多头排列）
+  - 价格在 MA20 上方
+  - 近5日高点不断抬升
+
+exit_conditions:
+  - ADX开始下行且低于 20
+  - 或 -DI 上穿 +DI
+  - 或盈利超过 20%
+  - 或亏损超过 7%
+
+execution:
+  strategy_class: trend_following
+  strategy_params:
+    period: 14
+
+parameters:
+  adx_period: 14
+  adx_threshold: 25
+  stop_loss_pct: 0.07
+  take_profit_pct: 0.20
+
+risk_notes: |
+  ADX滞后性较强，信号确认时趋势已运行一段距离，注意买入时机选择。

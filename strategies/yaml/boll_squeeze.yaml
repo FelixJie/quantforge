@@ -1,0 +1,62 @@
+name: boll_squeeze
+display_name: 布林收口突破
+description: |
+  布林带极度收窄（带宽低于近 60 日最小值的 1.1 倍）预示能量积累，
+  当价格向上突破上轨时买入，捕捉蓄势后的方向性行情。
+
+screener:
+  category: momentum
+  category_color: "#8b5cf6"
+  icon: zap
+  risk: 中
+  suitable: 横盘整理末期、主力建仓完成后的拉升阶段
+  holding_period: 1-3周
+  filters:
+    min_price: 4.0
+    max_pe: 100.0
+    min_pe: 3.0
+  factor_weights:
+    momentum: 6
+    liquidity: 5
+    size: 2
+    value: 2
+    pb: 1
+    quality: 3
+    large_cap: 1
+    graham: 0
+    value_composite: 1
+    float_ratio: 3
+  top_n: 20
+
+entry_conditions:
+  - 布林带带宽（Upper-Lower）处于近 60 日最低水平（极度收窄）
+  - 收盘价突破布林上轨
+  - 突破当日成交量 > 近 10 日均量的 1.3 倍
+  - 股价此前横盘整理超过 10 个交易日
+  - MACD 在零轴附近，DIF 向上穿越 DEA
+
+exit_conditions:
+  - 收盘价重新回到布林中轨以下
+  - 布林带再度收窄（二次蓄势，暂时减仓）
+  - 止损：跌破布林下轨收盘
+
+execution:
+  strategy_class: bollinger_breakout
+  strategy_params:
+    period: 20
+    std_dev: 2.0
+
+parameters:
+  boll_period: 20
+  boll_std: 2.0
+  squeeze_lookback: 60
+  squeeze_multiplier: 1.1
+  volume_ratio: 1.3
+  consolidation_days: 10
+  stop_loss_pct: 0.06
+  take_profit_pct: 0.18
+
+risk_notes: |
+  布林收口也可能向下突破，突破方向确认前不要预判。
+  假突破较多，建议等收盘价站稳上轨后操作，避免日内假突破。
+  若突破后次日即回落至轨内，视为假突破立即止损。

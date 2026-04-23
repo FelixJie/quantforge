@@ -1,0 +1,61 @@
+name: bear_market_defense
+display_name: 熊市防御
+description: |
+  熊市中寻找抗跌性最强的防御性板块：消费、医药、公用事业等。
+  以控制回撤为首要目标，在大盘下跌时守住本金。
+
+screener:
+  category: value
+  category_color: "#64748b"
+  icon: shield
+  risk: 低
+  suitable: 熊市主跌段、系统性风险释放期、不确定性上升阶段
+  holding_period: 2-6个月
+  filters:
+    min_price: 5.0
+    max_pe: 30.0
+    min_pe: 5.0
+    max_pb: 4.0
+  factor_weights:
+    quality: 10
+    value: 9
+    large_cap: 7
+    graham: 5
+    value_composite: 6
+    pb: 5
+    momentum: -2
+    liquidity: 4
+    size: 0
+    float_ratio: 0
+  top_n: 15
+
+entry_conditions:
+  - 所属板块为消费、医药、公用事业、电信等防御性行业
+  - 近 3 个月相对大盘跌幅小于 5%（抗跌性验证）
+  - 股息率 > 2.5%（提供基础收益保护）
+  - 净利润近 3 年无大幅波动（周期性低，业绩稳定）
+  - 机构持仓比例 > 20%（具有机构认可的安全垫）
+
+exit_conditions:
+  - 市场整体企稳反弹（沪指 MA20 向上穿越 MA60）
+  - 切换至进攻型策略时逐步退出防御仓位
+  - 持仓个股基本面出现负面变化
+
+execution:
+  strategy_class: dual_ma
+  strategy_params:
+    fast_period: 20
+    slow_period: 60
+
+parameters:
+  defensive_sector: true
+  relative_drawdown_max: 0.05
+  dividend_yield_min: 2.5
+  institution_pct_min: 20.0
+  stop_loss_pct: 0.10
+  take_profit_pct: 0.15
+
+risk_notes: |
+  防御策略目标是减少亏损而非盈利，不可在牛市中期过度配置防御。
+  即使是防御板块在熊市极端情况下也会下跌，需设置止损。
+  建议配合现金和债基共同构建防御组合，股票仓位不超过 30%。

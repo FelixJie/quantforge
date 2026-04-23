@@ -1,0 +1,64 @@
+name: low_turnover_value
+display_name: 低换手价值蓝筹
+description: |
+  日均换手率 < 1%、机构持仓 > 40%、长期业绩稳定的蓝筹价值股。
+  极低换手率意味着大股东和机构锁定筹码，浮动盘少，
+  适合跟随聪明资金做长线价值配置。
+
+screener:
+  category: value
+  category_color: "#1e40af"
+  icon: anchor
+  risk: 低
+  suitable: 震荡市长线底仓、机构增配窗口期、利率下行周期
+  holding_period: 3-12个月
+  filters:
+    min_price: 8.0
+    max_pe: 25.0
+    min_pe: 5.0
+    max_pb: 4.0
+  factor_weights:
+    quality: 9
+    large_cap: 9
+    value: 8
+    value_composite: 7
+    graham: 5
+    pb: 5
+    liquidity: 3
+    momentum: 1
+    size: 0
+    float_ratio: 1
+  top_n: 20
+
+entry_conditions:
+  - 近 60 日日均换手率 < 1%（极低换手，筹码稳定）
+  - 机构（公募+社保+QFII）持仓比例 > 40%
+  - 近 5 年净利润无亏损年份，增速中枢 > 5%
+  - 股息率 > 2%（提供持有期基础收益）
+  - PE < 20，PB < 3（估值合理，非高溢价蓝筹）
+  - 沪深300 成分股优先（流动性保障）
+
+exit_conditions:
+  - 换手率突然放大至日均 3% 以上（机构开始出货）
+  - PE 超过 30（估值充分）
+  - 连续两季度业绩低于预期
+
+execution:
+  strategy_class: dual_ma
+  strategy_params:
+    fast_period: 30
+    slow_period: 90
+
+parameters:
+  turnover_rate_max: 1.0
+  institution_pct_min: 40.0
+  dividend_yield_min: 2.0
+  pe_max: 20.0
+  pb_max: 3.0
+  stop_loss_pct: 0.10
+  take_profit_pct: 0.30
+
+risk_notes: |
+  低换手蓝筹在急跌行情中流动性会骤降，买卖冲击成本上升。
+  长期持有需忍受短期波动，不适合频繁交易的投资者。
+  需定期检查机构持仓变化，一旦机构集体减持应及时评估。

@@ -1,0 +1,53 @@
+name: green_energy_storage
+display_name: 储能电池龙头
+description: |
+  大规模储能需求爆发，电化学储能系统、BMS、PCS等核心环节的技术领先企业。
+
+screener:
+  category: growth
+  category_color: "#a855f7"
+  icon: battery-charging
+  risk: 高
+  suitable: 碳中和政策深化、储能装机加速期
+  holding_period: 1-3个月
+  filters:
+    min_price: 5.0
+    max_pe: 200.0
+    min_pe: 10.0
+  factor_weights:
+    momentum: 6
+    liquidity: 3
+    value: 0
+    pb: 0
+    quality: 4
+    size: 2
+    large_cap: 0
+    graham: 0
+    value_composite: 0
+    float_ratio: 2
+  top_n: 15
+
+entry_conditions:
+  - 储能相关收入占比>40%且快速增长
+  - 具备电芯/系统集成核心技术
+  - 大型央企/电力集团客户合同在手
+  - 产能规划落地且不存在严重过剩风险
+
+exit_conditions:
+  - 储能招标价格大幅下滑
+  - 或竞争格局急剧恶化
+  - 或盈利超过 35%
+  - 或亏损超过 12%
+
+execution:
+  strategy_class: theme_momentum
+  strategy_params:
+    theme: energy_storage
+
+parameters:
+  min_storage_revenue_ratio: 0.40
+  stop_loss_pct: 0.12
+  take_profit_pct: 0.35
+
+risk_notes: |
+  储能行业竞争激烈，价格战风险持续，需选择具备差异化优势的龙头。

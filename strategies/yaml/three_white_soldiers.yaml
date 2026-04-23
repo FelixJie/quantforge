@@ -1,0 +1,53 @@
+name: three_white_soldiers
+display_name: 三红兵强势反转
+description: |
+  连续三根阳线，每根收盘价高于前一根且开盘价在前一根实体内，反映多头持续强势。
+
+screener:
+  category: reversal
+  category_color: "#06b6d4"
+  icon: bar-chart-2
+  risk: 中
+  suitable: 底部确认、趋势启动初期
+  holding_period: 2-5周
+  filters:
+    min_price: 3.0
+    max_pe: 120.0
+  factor_weights:
+    momentum: 6
+    liquidity: 3
+    value: 2
+    pb: 1
+    quality: 0
+    size: 2
+    large_cap: 0
+    graham: 0
+    value_composite: 0
+    float_ratio: 2
+  top_n: 20
+
+entry_conditions:
+  - 出现三根连续上涨阳线
+  - 每根阳线收盘价高于前一阳线收盘
+  - 每根阳线实体占当日振幅60%以上
+  - 出现前股价处于下跌或横盘末期
+
+exit_conditions:
+  - 出现长上影线阴线
+  - 或成交量突然萎缩
+  - 或盈利超过 12%
+  - 或亏损超过 5%
+
+execution:
+  strategy_class: mean_reversion
+  strategy_params:
+    lookback: 10
+
+parameters:
+  body_ratio: 0.6
+  consecutive_days: 3
+  stop_loss_pct: 0.05
+  take_profit_pct: 0.12
+
+risk_notes: |
+  三连阳后追入需谨慎，上涨过急可能短期回调，建议等第一根回调阳线再介入。

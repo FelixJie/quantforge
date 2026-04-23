@@ -1,0 +1,55 @@
+name: mean_reversion_quant
+display_name: 统计均值回归
+description: |
+  基于Z-score统计偏离度，当股价偏离20日均值2个标准差时做反向操作，利用价格均值回归特性。
+
+screener:
+  category: reversal
+  category_color: "#06b6d4"
+  icon: activity
+  risk: 中
+  suitable: 震荡市、无明显趋势时
+  holding_period: 3-10个交易日
+  filters:
+    min_price: 3.0
+    max_pe: 100.0
+  factor_weights:
+    momentum: 1
+    liquidity: 5
+    value: 2
+    pb: 1
+    quality: 1
+    size: 2
+    large_cap: 2
+    graham: 0
+    value_composite: 0
+    float_ratio: 3
+  top_n: 25
+
+entry_conditions:
+  - 股价低于20日均线2个标准差（Z-score < -2）
+  - 近3日跌幅>8%且无重大利空
+  - 成交量未异常放大（排除主力出货）
+  - 大盘未处于系统性下跌阶段
+
+exit_conditions:
+  - 股价回归至20日均线附近（Z-score > -0.5）
+  - 或出现利空公告
+  - 或盈利超过 8%
+  - 或亏损超过 4%
+
+execution:
+  strategy_class: mean_reversion
+  strategy_params:
+    lookback: 20
+    z_threshold: 2.0
+
+parameters:
+  zscore_period: 20
+  entry_zscore: -2.0
+  exit_zscore: -0.5
+  stop_loss_pct: 0.04
+  take_profit_pct: 0.08
+
+risk_notes: |
+  均值回归在趋势市失效，必须配合大盘环境判断。避免在单边下跌市使用。

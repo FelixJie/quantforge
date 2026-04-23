@@ -1,0 +1,60 @@
+name: earnings_surprise
+display_name: 业绩超预期
+description: |
+  在财报公布后 3 个交易日内，筛选净利润超预期幅度 > 20% 且
+  股价尚未充分反映的个股。业绩驱动行情持续性强，风险相对可控。
+
+screener:
+  category: value
+  category_color: "#3b82f6"
+  icon: bar-chart-2
+  risk: 中
+  suitable: 财报季（3月/4月/7月/8月/10月）、业绩驱动行情
+  holding_period: 2-6周
+  filters:
+    min_price: 5.0
+    max_pe: 60.0
+    min_pe: 5.0
+  factor_weights:
+    quality: 9
+    value: 7
+    momentum: 5
+    value_composite: 5
+    pb: 3
+    graham: 3
+    liquidity: 3
+    size: 2
+    large_cap: 2
+    float_ratio: 2
+  top_n: 15
+
+entry_conditions:
+  - 最新季报净利润同比增速超市场预期 20% 以上
+  - 财报公布后 3 日内股价未出现跳空高开超过 10%（情绪未过热）
+  - ROE > 12%，盈利质量有保障
+  - PE(TTM) 合理（低于行业均值 1.2 倍）
+  - 机构持仓比例上季度有所提升
+
+exit_conditions:
+  - 股价相对财报公布前涨幅超过 30%（充分反映业绩）
+  - 下一季度业绩预期下调
+  - 跌破财报公布日收盘价
+
+execution:
+  strategy_class: dual_ma
+  strategy_params:
+    fast_period: 10
+    slow_period: 30
+
+parameters:
+  earnings_surprise_min: 0.20
+  roe_min: 12.0
+  pe_industry_ratio_max: 1.20
+  post_earnings_days: 3
+  stop_loss_pct: 0.08
+  take_profit_pct: 0.30
+
+risk_notes: |
+  财报数据需及时获取，延迟买入效果大幅衰减。
+  注意分辨一次性收益（资产出售等）与经营性利润超预期的区别。
+  财报季前不提前埋伏，等公布后确认数据再操作。

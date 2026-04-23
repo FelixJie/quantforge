@@ -1,0 +1,54 @@
+name: after_hours_big_deal
+display_name: 大宗交易折价跟踪
+description: |
+  大宗交易折价成交后，接盘方通常为机构，锁定期结束前逐步拉升，折价提供安全边际。
+
+screener:
+  category: multi_factor
+  category_color: "#8b5cf6"
+  icon: briefcase
+  risk: 中
+  suitable: 机构接盘大宗交易后的修复行情
+  holding_period: 2-6周
+  filters:
+    min_price: 3.0
+    max_pe: 80.0
+    min_market_cap: 30.0
+  factor_weights:
+    momentum: 3
+    liquidity: 4
+    value: 3
+    pb: 2
+    quality: 2
+    size: 2
+    large_cap: 0
+    graham: 0
+    value_composite: 0
+    float_ratio: 3
+  top_n: 20
+
+entry_conditions:
+  - 大宗交易折价超过5%
+  - 接盘方为机构席位（非券商自营）
+  - 成交量占当日流通盘1%以上
+  - 次日股价未跌破大宗成交价
+
+exit_conditions:
+  - 股价回升至大宗价格+折价幅度以上
+  - 或接盘机构开始在二级市场减持
+  - 或盈利超过 10%
+  - 或亏损超过 5%
+
+execution:
+  strategy_class: event_driven
+  strategy_params:
+    event_type: block_trade
+
+parameters:
+  min_discount: 0.05
+  min_volume_pct: 0.01
+  stop_loss_pct: 0.05
+  take_profit_pct: 0.10
+
+risk_notes: |
+  需识别大宗交易接盘方性质，大股东减持通过大宗转道的不在此列。

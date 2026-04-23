@@ -1,0 +1,64 @@
+name: ipo_new_stock
+display_name: 次新股掘金
+description: |
+  上市 3-12 个月内的次新股，在经历首批解禁调整后寻找低位机会。
+  次新股信息披露多、机构研究覆盖少，容易出现定价错误。
+  重点筛选基本面扎实、首日涨幅不高的次新股。
+
+screener:
+  category: growth
+  category_color: "#db2777"
+  icon: star
+  risk: 高
+  suitable: 市场情绪回暖期、IPO制度改革后、新股供给减少阶段
+  holding_period: 1-2个月
+  filters:
+    min_price: 5.0
+    max_pe: 100.0
+    min_pe: 8.0
+  factor_weights:
+    quality: 7
+    momentum: 5
+    float_ratio: 7
+    size: 6
+    liquidity: 4
+    value: 3
+    pb: 2
+    large_cap: 0
+    graham: 1
+    value_composite: 3
+  top_n: 15
+
+entry_conditions:
+  - 上市时间 3-12 个月（次新股窗口期）
+  - 首日涨幅 < 100%（定价相对合理，非疯狂炒作标的）
+  - 上市后经历至少一次 15% 以上调整（泡沫初步出清）
+  - IPO 前三年净利润复合增速 > 20%
+  - 流通市值 < 50 亿（弹性空间充足）
+  - 所处行业为高景气赛道（AI/新能源/生物医药/高端制造）
+
+exit_conditions:
+  - 上市满 12 个月（次新股效应消退）
+  - 大股东第一批解禁前 2 周（提前规避减持压力）
+  - 股价较阶段低点涨幅超过 40%
+
+execution:
+  strategy_class: dual_ma
+  strategy_params:
+    fast_period: 10
+    slow_period: 30
+
+parameters:
+  listing_months_min: 3
+  listing_months_max: 12
+  ipo_day_gain_max: 100.0
+  drawdown_min: 15.0
+  ipo_growth_min: 20.0
+  float_cap_max: 50.0
+  stop_loss_pct: 0.10
+  take_profit_pct: 0.40
+
+risk_notes: |
+  次新股信息不对称严重，散户相对机构处于劣势，需格外谨慎。
+  首批解禁（通常上市6个月）是最大风险节点，必须提前关注。
+  次新股在熊市中下跌往往更惨烈，严格控制仓位（单只 < 5%）。

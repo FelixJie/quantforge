@@ -1,0 +1,57 @@
+name: small_mid_cap_growth
+display_name: 中小盘成长加速
+description: |
+  市值50-200亿的中小盘成长股，营收增速连续两季度加速且ROE改善，弹性显著优于大盘股。
+
+screener:
+  category: growth
+  category_color: "#a855f7"
+  icon: trending-up
+  risk: 中高
+  suitable: 牛市中期、风险偏好上升期
+  holding_period: 2-8周
+  filters:
+    min_price: 5.0
+    max_pe: 100.0
+    min_pe: 10.0
+    min_market_cap: 50.0
+    max_market_cap: 200.0
+  factor_weights:
+    momentum: 5
+    liquidity: 3
+    value: 1
+    pb: 0
+    quality: 5
+    size: 4
+    large_cap: 0
+    graham: 0
+    value_composite: 0
+    float_ratio: 2
+  top_n: 20
+
+entry_conditions:
+  - 市值50-200亿区间
+  - 营收增速近两季度均>25%且加速
+  - ROE近2季度环比改善
+  - 机构覆盖度低但有增持动作
+
+exit_conditions:
+  - 营收增速开始减速
+  - 或机构大量涌入导致估值过高
+  - 或盈利超过 30%
+  - 或亏损超过 10%
+
+execution:
+  strategy_class: factor_ranking
+  strategy_params:
+    primary_factor: revenue_growth
+
+parameters:
+  min_market_cap: 50.0
+  max_market_cap: 200.0
+  min_revenue_growth: 0.25
+  stop_loss_pct: 0.10
+  take_profit_pct: 0.30
+
+risk_notes: |
+  中小盘流动性较差，大资金进出冲击成本高，建议单票仓位不超过5%。

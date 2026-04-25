@@ -1,0 +1,60 @@
+name: small_cap_growth
+display_name: 小盘成长
+description: |
+  聚焦流通市值 30 亿以下、营收增速 > 25% 的高成长小盘股。
+  小盘股弹性大，适合风险偏好高的投资者在市场情绪良好时配置。
+
+screener:
+  category: growth
+  category_color: "#ec4899"
+  icon: rocket
+  risk: 高
+  suitable: 科技成长行情、中小盘风格占优、市场风险偏好上行期
+  holding_period: 1-2个月
+  filters:
+    min_price: 3.0
+    max_pe: 200.0
+    min_pe: 10.0
+  factor_weights:
+    quality: 7
+    momentum: 7
+    float_ratio: 8
+    size: 8
+    liquidity: 4
+    value: 2
+    pb: 1
+    large_cap: -5
+    graham: 0
+    value_composite: 2
+  top_n: 20
+
+entry_conditions:
+  - 流通市值 < 30 亿（小盘弹性标的）
+  - 近两年营业收入增速 > 25%
+  - 净利润增速 > 20%（盈利质量有保证，非烧钱成长）
+  - 行业赛道具有较高景气度（新能源、AI、半导体、创新药等）
+  - 机构持仓比例 < 30%（机构尚未充分布局，仍有上涨空间）
+
+exit_conditions:
+  - 流通市值超过 60 亿（成长空间收窄）
+  - 营收增速连续两季下滑至 15% 以下
+  - 跌破 MA20 且成交量放大
+
+execution:
+  strategy_class: dual_ma
+  strategy_params:
+    fast_period: 10
+    slow_period: 30
+
+parameters:
+  float_cap_max: 30.0
+  revenue_growth_min: 25.0
+  profit_growth_min: 20.0
+  institution_pct_max: 30.0
+  stop_loss_pct: 0.10
+  take_profit_pct: 0.35
+
+risk_notes: |
+  小盘股流动性差，大额买卖会影响股价，应控制单笔买入金额。
+  小盘成长股估值弹性大，市场风格切换时跌幅可能超过 30%。
+  止损必须执行，不可抱有幻想，控制单只仓位在 5%-8%。

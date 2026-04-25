@@ -1,0 +1,55 @@
+name: risk_parity
+display_name: 风险平价配置
+description: |
+  按风险贡献均等化分配资产权重，低波动资产获得更高权重，实现风险分散最优化。
+
+screener:
+  category: defensive
+  category_color: "#64748b"
+  icon: shield
+  risk: 低
+  suitable: 全天候配置、高波动市场防御
+  holding_period: 1-3个月
+  filters:
+    min_price: 5.0
+    max_pe: 60.0
+    min_market_cap: 200.0
+  factor_weights:
+    momentum: 1
+    liquidity: 3
+    value: 3
+    pb: 2
+    quality: 5
+    size: 0
+    large_cap: 4
+    graham: 0
+    value_composite: 1
+    float_ratio: 0
+  top_n: 20
+
+entry_conditions:
+  - 近60日波动率低于市场均值
+  - 贝塔值 < 0.8
+  - 股息率 > 2%
+  - 行业分散化要求（单一行业不超过30%）
+
+exit_conditions:
+  - 个股波动率大幅上升至市场均值以上
+  - 或贝塔值突破1.2
+  - 或定期再平衡时权重偏离目标超过5%
+  - 或亏损超过 8%
+
+execution:
+  strategy_class: factor_ranking
+  strategy_params:
+    primary_factor: volatility_inverse
+
+parameters:
+  max_beta: 0.8
+  min_dividend_yield: 0.02
+  rebalance_period: 20
+  stop_loss_pct: 0.08
+  take_profit_pct: 0.20
+
+risk_notes: |
+  风险平价在全市场下跌时同样亏损，不是绝对收益策略。适合与成长策略组合使用。

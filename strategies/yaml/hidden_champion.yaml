@@ -1,0 +1,59 @@
+name: hidden_champion
+display_name: 隐形冠军
+description: |
+  细分行业市占率第一、ROE持续>15%、市值100-500亿的中小型龙头，
+  机构关注度低但护城河强，长期持有价值突出。
+
+screener:
+  category: quality
+  category_color: "#22c55e"
+  icon: award
+  risk: 低中
+  suitable: 中长线价值配置
+  holding_period: 3-12个月
+  filters:
+    min_price: 5.0
+    max_pe: 60.0
+    min_pe: 10.0
+    min_market_cap: 100.0
+    max_market_cap: 500.0
+  factor_weights:
+    momentum: 2
+    liquidity: 1
+    value: 3
+    pb: 2
+    quality: 8
+    size: 0
+    large_cap: 0
+    graham: 0
+    value_composite: 1
+    float_ratio: 0
+  top_n: 20
+
+entry_conditions:
+  - ROE连续5年>15%
+  - 细分行业市占率前三
+  - 机构持仓比例<20%（关注度低）
+  - 负债率<40%
+
+exit_conditions:
+  - ROE连续两季度下滑超过5个百分点
+  - 或大机构大幅增持导致估值过高
+  - 或盈利超过 40%
+  - 或基本面逻辑破坏
+
+execution:
+  strategy_class: factor_ranking
+  strategy_params:
+    primary_factor: roe
+
+parameters:
+  roe_min: 0.15
+  roe_years: 5
+  max_inst_holding: 0.20
+  max_debt_ratio: 0.40
+  stop_loss_pct: 0.12
+  take_profit_pct: 0.40
+
+risk_notes: |
+  细分龙头流动性较差，建议分批建仓，不适合频繁交易。

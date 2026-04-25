@@ -1,0 +1,52 @@
+name: global_macro_china
+display_name: 全球宏观中国受益
+description: |
+  美联储降息/美元走弱/大宗商品涨价等全球宏观变化，筛选受益最直接的A股标的。
+
+screener:
+  category: multi_factor
+  category_color: "#8b5cf6"
+  icon: globe
+  risk: 中
+  suitable: 宏观周期转换、政策转向期
+  holding_period: 1-3个月
+  filters:
+    min_price: 3.0
+    max_pe: 80.0
+    min_market_cap: 50.0
+  factor_weights:
+    momentum: 4
+    liquidity: 3
+    value: 3
+    pb: 1
+    quality: 3
+    size: 1
+    large_cap: 2
+    graham: 0
+    value_composite: 1
+    float_ratio: 0
+  top_n: 20
+
+entry_conditions:
+  - 美联储政策出现重大转向（降息/缩表暂停）
+  - 美元指数走弱（DXY下行趋势）
+  - 受益于弱美元的人民币计价资产
+  - 大宗商品价格上行利好的资源/材料股
+
+exit_conditions:
+  - 宏观政策再次转鹰
+  - 或美元指数重回强势
+  - 或盈利超过 20%
+  - 或亏损超过 8%
+
+execution:
+  strategy_class: macro_cycle
+  strategy_params:
+    macro_factor: usd_weakness
+
+parameters:
+  stop_loss_pct: 0.08
+  take_profit_pct: 0.20
+
+risk_notes: |
+  宏观策略周期长、判断难度大，建议配合微观选股，控制单一主题暴露度。

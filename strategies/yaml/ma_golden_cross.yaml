@@ -1,0 +1,60 @@
+name: ma_golden_cross
+display_name: 均线金叉
+description: |
+  当5日均线从下方穿越20日均线时买入（金叉），当5日均线从上方穿越20日均线时卖出（死叉）。
+  适合趋势跟随，震荡市效果较差。
+
+# ── 选股筛选配置（screener 模块使用）────────────────────────
+screener:
+  category: momentum
+  category_color: "#f59e0b"
+  icon: trending-up
+  risk: 中
+  suitable: 趋势上升行情、单边牛市
+  holding_period: 2-8周
+  filters:
+    min_price: 3.0
+    max_pe: 100.0
+    min_pe: 2.0
+  factor_weights:
+    momentum: 7
+    liquidity: 3
+    value: 1
+    pb: 0
+    quality: 0
+    size: 1
+    large_cap: 0
+    graham: 0
+    value_composite: 0
+    float_ratio: 1
+  top_n: 30
+
+# ── LLM 信号分析（YAML问股模块使用）──────────────────────────
+entry_conditions:
+  - MA5 从下方穿越 MA20（金叉）
+  - 成交量相对前5日平均放大 20% 以上
+  - 价格在 MA20 上方
+  - MA5 > MA10 > MA20 多头排列
+
+exit_conditions:
+  - MA5 从上方穿越 MA20（死叉）
+  - 或持仓盈利超过 15%
+  - 或亏损超过 7%
+
+# ── 回测/实盘执行配置（策略库使用）──────────────────────────
+execution:
+  strategy_class: dual_ma          # 对应策略库中的 key
+  strategy_params:
+    fast_period: 5
+    slow_period: 20
+
+parameters:
+  fast_period: 5
+  slow_period: 20
+  volume_amplify: 1.2
+  stop_loss_pct: 0.07
+  take_profit_pct: 0.15
+
+risk_notes: |
+  不适合在横盘震荡市场使用，会产生频繁假信号。
+  建议配合大盘趋势过滤器使用。

@@ -1,0 +1,59 @@
+name: spin_off_reform
+display_name: 重组重大资产
+description: |
+  上市公司发布重大资产重组、分拆上市、引入战略投资者等公告后，
+  在消化初期炒作、股价回归理性后，寻找有基本面支撑的持续性机会。
+
+screener:
+  category: growth
+  category_color: "#b45309"
+  icon: scissors
+  risk: 高
+  suitable: 国企改革深化期、并购重组活跃期、产业整合阶段
+  holding_period: 1-3个月
+  filters:
+    min_price: 3.0
+    max_pe: 150.0
+    min_pe: 0.0
+  factor_weights:
+    quality: 6
+    momentum: 5
+    size: 4
+    float_ratio: 4
+    value: 4
+    pb: 3
+    liquidity: 4
+    large_cap: 3
+    graham: 1
+    value_composite: 3
+  top_n: 15
+
+entry_conditions:
+  - 近 60 日内发布重大资产重组、分拆上市或战投引入公告
+  - 公告发布后股价上涨超过 20% 后发生回调（炒作退潮后布局）
+  - 重组标的资产盈利能力良好（注入资产 ROE > 10%）
+  - 收购价格合理（不存在明显高溢价）
+  - 实控人/国资背景具有较强可信度（非空壳重组）
+
+exit_conditions:
+  - 重组获监管批准并完成股权登记（事件驱动完成，退出）
+  - 重组宣告失败
+  - 股价跌破公告前收盘价的 10% 以下
+
+execution:
+  strategy_class: dual_ma
+  strategy_params:
+    fast_period: 10
+    slow_period: 30
+
+parameters:
+  announcement_window_days: 60
+  post_spike_pullback: 0.20
+  target_roe_min: 10.0
+  stop_loss_pct: 0.10
+  take_profit_pct: 0.35
+
+risk_notes: |
+  重组存在监管不批准、方案修改、重组方跑路等多种失败风险。
+  部分重组是大股东套现手段（高价注入劣质资产），需仔细研读公告。
+  重组股停牌风险高，复牌后方向不确定，需留有仓位余量。

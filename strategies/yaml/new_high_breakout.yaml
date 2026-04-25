@@ -1,0 +1,62 @@
+name: new_high_breakout
+display_name: 创新高突破
+description: |
+  股价突破近 52 周（250交易日）历史新高，配合成交量放大确认。
+  新高往往意味着套牢盘全部解锁，阻力极小，趋势延续概率高。
+
+screener:
+  category: momentum
+  category_color: "#ef4444"
+  icon: trending-up
+  risk: 中高
+  suitable: 牛市中后期、结构性行情、强势股领涨阶段
+  holding_period: 2-8周
+  filters:
+    min_price: 5.0
+    max_pe: 150.0
+    min_pe: 5.0
+    min_change_pct: 1.0
+  factor_weights:
+    momentum: 10
+    liquidity: 5
+    float_ratio: 4
+    quality: 3
+    size: 2
+    value: 1
+    pb: 0
+    large_cap: 0
+    graham: 0
+    value_composite: 1
+  top_n: 15
+
+entry_conditions:
+  - 收盘价突破近 250 个交易日最高价（历史新高）
+  - 突破日成交量 > 近 20 日均量的 1.5 倍
+  - 近 60 日相对大盘涨幅超过 15%（强势股）
+  - 突破前经历至少 10 日横盘整理（非直线拉升后的假突破）
+  - MA5 > MA20 > MA60 多头格局
+
+exit_conditions:
+  - 收盘价跌回突破价以下并持续 2 日
+  - 创新高后 3 日内回调超过 8%
+  - 止盈：突破后涨幅超过 25%
+
+execution:
+  strategy_class: bollinger_breakout
+  strategy_params:
+    period: 20
+    std_dev: 2.0
+
+parameters:
+  new_high_period: 250
+  volume_ratio: 1.5
+  consolidation_days: 10
+  relative_strength_days: 60
+  relative_strength_min: 0.15
+  stop_loss_pct: 0.08
+  take_profit_pct: 0.25
+
+risk_notes: |
+  高位创新高风险较大，需确认大盘整体未过热（沪深300 RSI < 70）。
+  部分新高是主力出货前的拉升，需结合换手率和机构行为判断。
+  仓位控制：单只不超过总资金 15%，组合持仓不超过 3 只。

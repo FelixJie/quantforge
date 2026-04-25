@@ -1,0 +1,52 @@
+name: industry_cycle_bottom
+display_name: 行业周期底部布局
+description: |
+  行业景气指数处于历史底部20%分位，龙头股估值创历史新低，周期反转前最佳布局时机。
+
+screener:
+  category: value
+  category_color: "#3b82f6"
+  icon: bar-chart
+  risk: 中
+  suitable: 周期行业底部反转
+  holding_period: 3-9个月
+  filters:
+    min_price: 3.0
+    max_pe: 30.0
+  factor_weights:
+    momentum: 2
+    liquidity: 3
+    value: 7
+    pb: 4
+    quality: 2
+    size: 1
+    large_cap: 2
+    graham: 1
+    value_composite: 2
+    float_ratio: 0
+  top_n: 20
+
+entry_conditions:
+  - 所属行业PB处于历史最低20%分位
+  - 行业龙头股PE低于近5年均值1.5σ
+  - 行业去产能/政策支持信号出现
+  - 基本金属/化工/钢铁等周期品价格见底
+
+exit_conditions:
+  - 行业景气度明显回升、估值修复至均值
+  - 或产能扩张信号重现
+  - 或盈利超过 40%
+  - 或亏损超过 12%
+
+execution:
+  strategy_class: factor_ranking
+  strategy_params:
+    primary_factor: pb
+
+parameters:
+  pb_percentile: 0.20
+  stop_loss_pct: 0.12
+  take_profit_pct: 0.40
+
+risk_notes: |
+  周期底部难以精准判断，建议分批建仓，周期拐点可能滞后于预期6-12个月。

@@ -1,0 +1,55 @@
+name: keltner_breakout
+display_name: 肯特纳通道突破
+description: |
+  价格突破以ATR为宽度的肯特纳通道上轨，与布林带结合过滤假突破，信号质量更高。
+
+screener:
+  category: momentum
+  category_color: "#f59e0b"
+  icon: maximize
+  risk: 中
+  suitable: 趋势启动、强势格局
+  holding_period: 2-5周
+  filters:
+    min_price: 4.0
+    max_pe: 150.0
+  factor_weights:
+    momentum: 8
+    liquidity: 4
+    value: 0
+    pb: 0
+    quality: 1
+    size: 2
+    large_cap: 0
+    graham: 0
+    value_composite: 0
+    float_ratio: 2
+  top_n: 20
+
+entry_conditions:
+  - 收盘价突破肯特纳通道上轨（EMA20 + 2×ATR14）
+  - 布林带同时处于扩张状态
+  - RSI(14) 在 55-80 区间（不超买）
+  - 成交量放大确认
+
+exit_conditions:
+  - 价格跌回肯特纳通道内
+  - 或RSI超过85进入深度超买
+  - 或盈利超过 15%
+  - 或亏损超过 5%
+
+execution:
+  strategy_class: bollinger_breakout
+  strategy_params:
+    period: 20
+    atr_multiplier: 2.0
+
+parameters:
+  ema_period: 20
+  atr_period: 14
+  atr_multiplier: 2.0
+  stop_loss_pct: 0.05
+  take_profit_pct: 0.15
+
+risk_notes: |
+  肯特纳通道突破比布林带突破更严格，假突破率低，但信号频率也低。

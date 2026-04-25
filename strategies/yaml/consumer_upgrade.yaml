@@ -1,0 +1,55 @@
+name: consumer_upgrade
+display_name: 消费升级龙头
+description: |
+  高端消费品/服务龙头，品牌溢价强，消费升级趋势下盈利能力持续提升。
+
+screener:
+  category: growth
+  category_color: "#a855f7"
+  icon: shopping-bag
+  risk: 中
+  suitable: 消费复苏、内需刺激政策期
+  holding_period: 2-6个月
+  filters:
+    min_price: 10.0
+    max_pe: 60.0
+    min_pe: 15.0
+    min_market_cap: 100.0
+  factor_weights:
+    momentum: 3
+    liquidity: 2
+    value: 2
+    pb: 1
+    quality: 7
+    size: 0
+    large_cap: 2
+    graham: 0
+    value_composite: 1
+    float_ratio: 0
+  top_n: 20
+
+entry_conditions:
+  - 毛利率>40%（高品牌溢价）
+  - 净利润率>15%且稳定
+  - 消费复苏数据超预期
+  - 股价处于近1年估值低位
+
+exit_conditions:
+  - 消费数据明显下行
+  - 或估值回到历史均值以上1倍标准差
+  - 或盈利超过 25%
+  - 或亏损超过 10%
+
+execution:
+  strategy_class: factor_ranking
+  strategy_params:
+    primary_factor: gross_margin
+
+parameters:
+  min_gross_margin: 0.40
+  min_net_margin: 0.15
+  stop_loss_pct: 0.10
+  take_profit_pct: 0.25
+
+risk_notes: |
+  消费股受经济周期影响较大，需关注消费信心指数和社零数据。

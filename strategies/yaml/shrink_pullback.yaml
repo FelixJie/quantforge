@@ -1,0 +1,62 @@
+name: shrink_pullback
+display_name: 缩量回调
+description: |
+  在上升趋势中，等待股价回调至均线支撑位且成交量明显萎缩时买入。
+  缩量表示抛压减轻，回调接近尾声，是低风险买入时机。
+
+# ── 选股筛选配置（screener 模块使用）────────────────────────
+screener:
+  category: momentum
+  category_color: "#22c55e"
+  icon: arrow-down-right
+  risk: 低中
+  suitable: 上升趋势中的回调机会、慢牛行情
+  holding_period: 2-6周
+  filters:
+    min_price: 3.0
+    max_pe: 80.0
+    min_pe: 2.0
+    max_change_pct: 2.0   # 当日涨幅不大（回调中）
+  factor_weights:
+    momentum: 5
+    liquidity: 2
+    quality: 3
+    value: 2
+    pb: 1
+    size: 1
+    large_cap: 0
+    graham: 0
+    value_composite: 0
+    float_ratio: 1
+  top_n: 25
+
+# ── LLM 信号分析（YAML问股模块使用）──────────────────────────
+entry_conditions:
+  - MA5 > MA10 > MA20 多头排列（大趋势向上）
+  - 价格回调至 MA10 或 MA20 附近（偏差 ±3%）
+  - 当日成交量 < 近 5 日平均成交量的 0.7 倍（明显缩量）
+  - 回调幅度不超过前高的 10%
+
+exit_conditions:
+  - 价格重新站上 MA5
+  - 或持仓盈利超过 12%
+  - 或收盘价跌破 MA20 止损
+
+# ── 回测/实盘执行配置（策略库使用）──────────────────────────
+execution:
+  strategy_class: rsi_mean_revert   # 均值回归类，缩量回调本质是超跌反弹
+  strategy_params:
+    rsi_period: 14
+    oversold: 35
+    overbought: 70
+
+parameters:
+  support_ma: 20
+  volume_shrink: 0.7
+  max_pullback_pct: 0.10
+  stop_below_ma: 20
+  take_profit_pct: 0.12
+
+risk_notes: |
+  需要在明确上升趋势中使用，趋势不明确时不操作。
+  止损设在 MA20 下方 1%，风险可控。

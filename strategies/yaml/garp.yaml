@@ -1,0 +1,61 @@
+name: garp
+display_name: GARP成长合理价
+description: |
+  Growth at Reasonable Price：PEG < 1 的高成长低估股。
+  要求净利润增速 > 20% 且 PE/增速（PEG）< 1，
+  兼顾成长性与估值安全边际，避免高价追成长。
+
+screener:
+  category: growth
+  category_color: "#7c3aed"
+  icon: trending-up
+  risk: 中
+  suitable: 成长股行情、科技/消费板块景气期、估值回归阶段
+  holding_period: 1-3个月
+  filters:
+    min_price: 5.0
+    max_pe: 80.0
+    min_pe: 8.0
+  factor_weights:
+    quality: 8
+    momentum: 5
+    value: 5
+    value_composite: 5
+    pb: 2
+    graham: 2
+    liquidity: 4
+    size: 3
+    large_cap: 2
+    float_ratio: 2
+  top_n: 20
+
+entry_conditions:
+  - PEG（PE / 净利润增速）< 1（核心条件，用TTM PE和最新季报增速计算）
+  - 净利润增速 > 20%（具备显著成长性）
+  - 营业收入增速 > 15%（收入端同步增长，非利润虚胖）
+  - ROE > 12%，净利率保持稳定或改善
+  - 近 3 个月机构持仓环比提升（聪明资金在增配）
+
+exit_conditions:
+  - PEG 升至 1.5 以上（高估）
+  - 净利润增速连续两季下滑至 10% 以下
+  - 股价跌破 MA30，趋势破坏
+
+execution:
+  strategy_class: dual_ma
+  strategy_params:
+    fast_period: 15
+    slow_period: 45
+
+parameters:
+  peg_max: 1.0
+  profit_growth_min: 20.0
+  revenue_growth_min: 15.0
+  roe_min: 12.0
+  stop_loss_pct: 0.08
+  take_profit_pct: 0.30
+
+risk_notes: |
+  PEG 计算依赖增速预期，若增速不可持续，PEG 低估的安全感是假象。
+  高增速行业（AI、新能源）估值弹性大，PEG > 1 时也可能继续上涨。
+  建议结合行业景气判断，避免在行业下行周期中机械套用PEG估值。

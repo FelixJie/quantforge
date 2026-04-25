@@ -1,0 +1,64 @@
+name: big_order_tracking
+display_name: 大单净买入追踪
+description: |
+  单笔 > 50 万元的大单（机构/游资主导）连续净流入，
+  说明聪明资金正在积极建仓。结合股价形态确认，
+  跟随主力资金方向操作，胜率和盈亏比均较优。
+
+screener:
+  category: momentum
+  category_color: "#7c3aed"
+  icon: arrow-up-circle
+  risk: 中高
+  suitable: 主力建仓完成后的拉升阶段、资金明显集中流入期
+  holding_period: 3-10天
+  filters:
+    min_price: 3.0
+    max_pe: 150.0
+    min_pe: 2.0
+    min_change_pct: 0.5
+  factor_weights:
+    momentum: 8
+    liquidity: 8
+    float_ratio: 6
+    size: 4
+    quality: 3
+    value: 2
+    pb: 1
+    large_cap: 1
+    graham: 0
+    value_composite: 1
+  top_n: 20
+
+entry_conditions:
+  - 近 3 日大单（单笔 > 50 万）连续净流入
+  - 大单净流入金额 > 总成交额的 20%（资金集中度高）
+  - 近 5 日换手率 1%-8%（适度活跃，非过度换手出货）
+  - 股价在大单流入期间上涨或维稳（价格配合资金）
+  - 流通市值 < 100 亿（大单资金对小盘股影响更显著）
+
+exit_conditions:
+  - 大单连续 2 日净流出（主力撤离信号）
+  - 换手率急升至 15% 以上（主力高位出货）
+  - 跌破近 5 日均价
+
+execution:
+  strategy_class: bollinger_breakout
+  strategy_params:
+    period: 10
+    std_dev: 1.5
+
+parameters:
+  big_order_threshold: 500000
+  net_inflow_days: 3
+  inflow_ratio_min: 0.20
+  turnover_range: [1.0, 8.0]
+  float_cap_max: 100.0
+  stop_loss_pct: 0.05
+  take_profit_pct: 0.12
+  max_hold_days: 10
+
+risk_notes: |
+  大单数据有延迟，实时性不足，需结合盘面观察做综合判断。
+  游资大单快进快出，跟踪难度大，持仓时间不宜过长。
+  主力建仓期间故意做出大单买入假象的情况存在，需配合形态验证。

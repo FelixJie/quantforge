@@ -1,0 +1,63 @@
+name: index_rebalance
+display_name: 指数调仓套利
+description: |
+  沪深300、中证500、MSCI等重要指数每季度调仓，
+  新纳入成分股因被动基金强制买入而上涨，
+  剔除成分股因基金卖出而下跌。在调仓公告后提前布局。
+
+screener:
+  category: value
+  category_color: "#0369a1"
+  icon: refresh-cw
+  risk: 低中
+  suitable: 指数调仓公告后至正式生效前（通常1-2周窗口）
+  holding_period: 1-2周
+  filters:
+    min_price: 5.0
+    max_pe: 50.0
+    min_pe: 4.0
+    max_pb: 6.0
+  factor_weights:
+    large_cap: 9
+    liquidity: 9
+    quality: 6
+    value: 5
+    value_composite: 4
+    momentum: 4
+    pb: 3
+    size: 0
+    graham: 2
+    float_ratio: 2
+  top_n: 15
+
+entry_conditions:
+  - 已被确认新纳入沪深300/中证500/MSCI成分股名单
+  - 公告日至生效日之间的窗口期内（通常 5-10 个交易日）
+  - 纳入后被动基金预计买入量 > 日均成交量的 3 倍（冲击效应显著）
+  - 股价在公告后未大幅跳涨（窗口期仍有获利空间）
+  - 流动性充足（日均成交额 > 2 亿，便于快速建仓和离场）
+
+exit_conditions:
+  - 指数正式调仓生效日前 1 个交易日（卖在预期兑现前）
+  - 股价已超前反映，涨幅超过预期被动买入量影响
+  - 市场大幅下跌导致被动买入效应被淹没
+
+execution:
+  strategy_class: dual_ma
+  strategy_params:
+    fast_period: 5
+    slow_period: 10
+
+parameters:
+  index_inclusion: true
+  announcement_window: 10
+  passive_flow_ratio: 3.0
+  daily_turnover_min: 200000000
+  stop_loss_pct: 0.04
+  take_profit_pct: 0.08
+  max_hold_days: 10
+
+risk_notes: |
+  指数调仓套利已被充分挖掘，价差空间逐年收窄。
+  被纳入成分股消息有时提前泄露，公告日已涨一部分，需谨慎追高。
+  被动基金买入时间分散，非集中在生效日，套利窗口判断需精细化。

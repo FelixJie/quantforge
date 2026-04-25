@@ -1,0 +1,60 @@
+name: kd_oversold
+display_name: KDJ超卖金叉
+description: |
+  KDJ 三线（K/D/J）均跌至 20 以下极度超卖区，随后 K 线上穿
+  D 线形成金叉。在超卖极限区域的金叉信号，反弹成功率高。
+
+screener:
+  category: reversal
+  category_color: "#7c3aed"
+  icon: activity
+  risk: 中
+  suitable: 调整充分后的底部区域、震荡市短期超跌
+  holding_period: 5-15天
+  filters:
+    min_price: 3.0
+    max_pe: 100.0
+    min_pe: 3.0
+    min_change_pct: -8.0
+  factor_weights:
+    momentum: -3
+    value: 5
+    liquidity: 7
+    quality: 4
+    size: 3
+    pb: 3
+    large_cap: 3
+    graham: 2
+    value_composite: 3
+    float_ratio: 3
+  top_n: 20
+
+entry_conditions:
+  - KDJ 的 K、D、J 三线均跌至 20 以下（极度超卖）
+  - K 线向上穿越 D 线（金叉信号）
+  - 金叉发生时 J 值低于 10（信号更强烈）
+  - 成交量在超卖期间萎缩（空头力量衰竭）
+  - 股价基本面无重大负面因素
+
+exit_conditions:
+  - KDJ 的 K 值升至 80 以上（超买）
+  - K 线向下穿越 D 线（死叉）
+  - 持有超过 15 个交易日强制止盈止损
+
+execution:
+  strategy_class: mean_reversion
+  strategy_params:
+    period: 14
+    std_threshold: 2.0
+
+parameters:
+  kdj_oversold_threshold: 20
+  j_extreme_threshold: 10
+  stop_loss_pct: 0.06
+  take_profit_pct: 0.12
+  max_hold_days: 15
+
+risk_notes: |
+  KDJ 在单边下跌行情中会长期处于超卖区，不可机械使用。
+  需配合大盘判断：若沪指处于主跌段，KDJ 超卖金叉失效率高。
+  连续出现多次超卖金叉而无效时，应暂停使用此策略。

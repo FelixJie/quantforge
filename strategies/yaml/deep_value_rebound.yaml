@@ -1,0 +1,63 @@
+name: deep_value_rebound
+display_name: 深度超跌价值修复
+description: |
+  股价从高点累计回撤超过 50%，但基本面仍然健康的深度超跌标的。
+  股价的大幅下跌往往包含过度悲观的情绪折价，当情绪修复时
+  价值回归空间可观。结合技术止跌信号降低抄底风险。
+
+screener:
+  category: reversal
+  category_color: "#7c3aed"
+  icon: anchor
+  risk: 中高
+  suitable: 熊市末期、情绪极度悲观、基本面误杀行情
+  holding_period: 1-6个月
+  filters:
+    min_price: 2.0
+    max_pe: 60.0
+    min_pe: 3.0
+    max_pb: 2.0
+  factor_weights:
+    pb: 8
+    value: 7
+    graham: 6
+    quality: 6
+    value_composite: 5
+    momentum: -3
+    liquidity: 4
+    size: 3
+    large_cap: 2
+    float_ratio: 2
+  top_n: 15
+
+entry_conditions:
+  - 股价较历史最高价回撤超过 50%（深度超跌）
+  - PB < 1.2，接近或低于净资产（安全边际充足）
+  - 近三年 ROE 均 > 8%（基本面仍然健康，非价值陷阱）
+  - 近 3 个月股价企稳，日线底部连续 2 次探低后反弹（双底形态）
+  - 机构持仓近一季度未出现大幅下降（聪明资金未撤离）
+
+exit_conditions:
+  - 股价回到近 52 周高点（价值充分修复）
+  - PB 升至行业中位数以上
+  - ROE 出现持续恶化信号（基本面变化，逻辑证伪）
+
+execution:
+  strategy_class: mean_reversion
+  strategy_params:
+    period: 20
+    std_threshold: 2.5
+
+parameters:
+  drawdown_from_high: 0.50
+  pb_max: 1.2
+  roe_min: 8.0
+  double_bottom: true
+  stop_loss_pct: 0.10
+  take_profit_pct: 0.40
+  max_hold_days: 120
+
+risk_notes: |
+  深度超跌标的部分是真价值陷阱，需深度研究而非单纯看跌幅。
+  双底形态识别需结合成交量，无量双底可信度低。
+  分批买入：第一批在双底确认时，第二批在反弹趋势确立后。

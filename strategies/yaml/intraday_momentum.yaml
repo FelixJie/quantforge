@@ -1,0 +1,53 @@
+name: intraday_momentum
+display_name: 开盘强势延续
+description: |
+  开盘前30分钟涨幅>2%且成交量放大，强势板块的领涨股往往能延续全天强势。
+
+screener:
+  category: momentum
+  category_color: "#f59e0b"
+  icon: sunrise
+  risk: 高
+  suitable: 热点行情、情绪高涨期
+  holding_period: 1-3个交易日
+  filters:
+    min_price: 3.0
+    max_pe: 200.0
+  factor_weights:
+    momentum: 9
+    liquidity: 5
+    value: 0
+    pb: 0
+    quality: 0
+    size: 2
+    large_cap: 0
+    graham: 0
+    value_composite: 0
+    float_ratio: 5
+  top_n: 10
+
+entry_conditions:
+  - 开盘30分钟涨幅>2%
+  - 开盘量>前日全天均量的30%
+  - 所属板块处于强势主题中
+  - 大盘未出现系统性下跌
+
+exit_conditions:
+  - 涨幅超过5%后缩量滞涨
+  - 或收盘前30分钟出现回头
+  - 或盈利超过 5%
+  - 或亏损超过 3%
+
+execution:
+  strategy_class: intraday_breakout
+  strategy_params:
+    window_minutes: 30
+
+parameters:
+  open_gain_threshold: 0.02
+  open_volume_ratio: 0.30
+  stop_loss_pct: 0.03
+  take_profit_pct: 0.05
+
+risk_notes: |
+  日内操作风险极高，需盯盘，不适合没有时间监控的投资者。

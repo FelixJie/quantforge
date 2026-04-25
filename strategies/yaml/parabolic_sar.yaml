@@ -1,0 +1,53 @@
+name: parabolic_sar
+display_name: 抛物线止损转向
+description: |
+  SAR指标从价格上方转到下方时产生买入信号，SAR动态追踪止损，适合捕捉趋势转折。
+
+screener:
+  category: momentum
+  category_color: "#f59e0b"
+  icon: rotate-cw
+  risk: 中高
+  suitable: 趋势转折初期、板块启动
+  holding_period: 1-4周
+  filters:
+    min_price: 3.0
+    max_pe: 150.0
+  factor_weights:
+    momentum: 7
+    liquidity: 4
+    value: 1
+    pb: 0
+    quality: 0
+    size: 2
+    large_cap: 0
+    graham: 0
+    value_composite: 0
+    float_ratio: 2
+  top_n: 20
+
+entry_conditions:
+  - SAR从价格上方翻转至下方（由空转多）
+  - 翻转当日收盘价高于前日高点
+  - 成交量较前日放大
+  - MACD出现金叉或柱线由负转正
+
+exit_conditions:
+  - SAR从价格下方翻转至上方（由多转空）
+  - 或盈利超过 15%
+  - 或亏损超过 6%
+
+execution:
+  strategy_class: trend_following
+  strategy_params:
+    acceleration: 0.02
+    maximum: 0.2
+
+parameters:
+  sar_acceleration: 0.02
+  sar_maximum: 0.20
+  stop_loss_pct: 0.06
+  take_profit_pct: 0.15
+
+risk_notes: |
+  SAR在震荡市会频繁翻转产生假信号，建议在ADX>20的趋势市使用。

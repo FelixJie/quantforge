@@ -1,0 +1,52 @@
+name: index_constituent_add
+display_name: 指数成分纳入套利
+description: |
+  预判即将被纳入沪深300/中证500等主要指数的股票，被动基金被动买入带来确定性涨幅。
+
+screener:
+  category: multi_factor
+  category_color: "#8b5cf6"
+  icon: plus-circle
+  risk: 低中
+  suitable: 指数调整窗口期（每季末）
+  holding_period: 1-4周
+  filters:
+    min_price: 3.0
+    max_pe: 100.0
+    min_market_cap: 50.0
+  factor_weights:
+    momentum: 3
+    liquidity: 5
+    value: 2
+    pb: 1
+    quality: 2
+    size: 2
+    large_cap: 1
+    graham: 0
+    value_composite: 0
+    float_ratio: 3
+  top_n: 15
+
+entry_conditions:
+  - 市值和流动性满足目标指数纳入条件
+  - 处于指数调整窗口期前1-2个月
+  - 分析师预测纳入概率>60%
+  - 被动基金持仓占比较低
+
+exit_conditions:
+  - 指数调整公告后次日高开时获利了结
+  - 或未能成功纳入后股价回落
+  - 或盈利超过 10%
+  - 或亏损超过 5%
+
+execution:
+  strategy_class: event_driven
+  strategy_params:
+    event_type: index_inclusion
+
+parameters:
+  stop_loss_pct: 0.05
+  take_profit_pct: 0.10
+
+risk_notes: |
+  预判不准确时亏损，需参考多个数据提供商的预测综合判断，仅在调整期前两周操作。

@@ -1,0 +1,55 @@
+name: double_bottom
+display_name: 双底形态反转
+description: |
+  识别W底形态：两次探底价格相近，第二底成交量缩量，颈线突破放量确认。
+  经典技术反转形态，成功率较高。
+
+screener:
+  category: reversal
+  category_color: "#06b6d4"
+  icon: trending-up
+  risk: 中
+  suitable: 底部确认后的反弹行情
+  holding_period: 3-8周
+  filters:
+    min_price: 3.0
+    max_pe: 100.0
+  factor_weights:
+    momentum: 3
+    liquidity: 3
+    value: 4
+    pb: 2
+    quality: 1
+    size: 1
+    large_cap: 0
+    graham: 0
+    value_composite: 0
+    float_ratio: 2
+  top_n: 20
+
+entry_conditions:
+  - 近60日内出现两次低点且价格相近（偏差<3%）
+  - 第二低点成交量小于第一低点
+  - 价格突破两低点之间高点（颈线）
+  - 颈线突破时成交量放大50%以上
+
+exit_conditions:
+  - 价格跌破颈线
+  - 或触及颈线到底部距离的等幅目标位
+  - 或盈利超过 20%
+  - 或亏损超过 6%
+
+execution:
+  strategy_class: mean_reversion
+  strategy_params:
+    lookback: 60
+
+parameters:
+  lookback_period: 60
+  bottom_deviation: 0.03
+  volume_confirm_ratio: 1.5
+  stop_loss_pct: 0.06
+  take_profit_pct: 0.20
+
+risk_notes: |
+  需要确认颈线突破才入场，突破不放量的双底可信度低。

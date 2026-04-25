@@ -1,0 +1,55 @@
+name: free_cash_flow
+display_name: 自由现金流选股
+description: |
+  筛选自由现金流收益率高（FCF/市值>5%）且持续产生正向现金流的公司，
+  现金为王，避免利润虚高陷阱。
+
+screener:
+  category: value
+  category_color: "#3b82f6"
+  icon: dollar-sign
+  risk: 低
+  suitable: 防御配置、价值投资
+  holding_period: 3-12个月
+  filters:
+    min_price: 3.0
+    max_pe: 50.0
+    min_pe: 5.0
+  factor_weights:
+    momentum: 1
+    liquidity: 2
+    value: 6
+    pb: 3
+    quality: 5
+    size: 0
+    large_cap: 2
+    graham: 0
+    value_composite: 1
+    float_ratio: 0
+  top_n: 20
+
+entry_conditions:
+  - 自由现金流收益率 > 5%（FCF/市值）
+  - 近3年均产生正向自由现金流
+  - 资本开支合理，非重资产行业
+  - 股息支付有现金流支撑
+
+exit_conditions:
+  - 自由现金流转负
+  - 或PE估值超过合理区间50%
+  - 或盈利超过 30%
+  - 或基本面恶化
+
+execution:
+  strategy_class: factor_ranking
+  strategy_params:
+    primary_factor: fcf_yield
+
+parameters:
+  fcf_yield_min: 0.05
+  positive_fcf_years: 3
+  stop_loss_pct: 0.10
+  take_profit_pct: 0.30
+
+risk_notes: |
+  自由现金流数据需通过财报获取，数据更新存在滞后，避免在财报期前后大幅调仓。

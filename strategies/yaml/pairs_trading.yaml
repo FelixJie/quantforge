@@ -1,0 +1,54 @@
+name: pairs_trading
+display_name: 配对交易套利
+description: |
+  同一行业高度相关的两只股票，当价差偏离历史均值时做多低估方、做空高估方（T+0限制下仅做多端）。
+
+screener:
+  category: multi_factor
+  category_color: "#8b5cf6"
+  icon: shuffle
+  risk: 低中
+  suitable: 行业内估值分化时
+  holding_period: 1-3周
+  filters:
+    min_price: 3.0
+    max_pe: 80.0
+  factor_weights:
+    momentum: 1
+    liquidity: 5
+    value: 4
+    pb: 3
+    quality: 2
+    size: 0
+    large_cap: 2
+    graham: 0
+    value_composite: 1
+    float_ratio: 3
+  top_n: 20
+
+entry_conditions:
+  - 与配对股票相关系数>0.85（近120日）
+  - 价差Z-score低于 -1.5
+  - 两只股票均无重大公告差异
+  - 行业景气度相同（非行业分化驱动）
+
+exit_conditions:
+  - 价差回归至历史均值
+  - 或配对股票基本面出现分化
+  - 或盈利超过 8%
+  - 或亏损超过 5%
+
+execution:
+  strategy_class: pairs_arb
+  strategy_params:
+    correlation_window: 120
+
+parameters:
+  correlation_threshold: 0.85
+  entry_zscore: -1.5
+  exit_zscore: 0.0
+  stop_loss_pct: 0.05
+  take_profit_pct: 0.08
+
+risk_notes: |
+  A股T+1限制使得配对交易实施难度高，仅做多端收益有限，需选择流动性好的大盘股。

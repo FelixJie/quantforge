@@ -1,0 +1,61 @@
+name: margin_expansion
+display_name: 毛利率扩张
+description: |
+  毛利率连续两个季度提升且提升幅度 > 3 个百分点，
+  说明公司定价能力增强或成本下降，是盈利质量改善的先行指标，
+  往往领先于市场反应 1-2 个季度。
+
+screener:
+  category: growth
+  category_color: "#059669"
+  icon: bar-chart
+  risk: 中
+  suitable: 行业供给出清后的量价齐升期、原材料价格下行周期
+  holding_period: 1-3个月
+  filters:
+    min_price: 5.0
+    max_pe: 60.0
+    min_pe: 5.0
+  factor_weights:
+    quality: 10
+    value: 6
+    momentum: 5
+    value_composite: 5
+    pb: 3
+    graham: 2
+    liquidity: 4
+    large_cap: 3
+    size: 2
+    float_ratio: 1
+  top_n: 20
+
+entry_conditions:
+  - 最新季报毛利率较去年同期提升 > 3 个百分点
+  - 连续两个季度毛利率环比提升（趋势性改善）
+  - 毛利率提升同时净利润增速 > 15%（非一次性成本节约）
+  - 营业收入同步增长（量价齐升，非以价换量）
+  - PE < 行业均值（市场尚未充分定价盈利改善）
+
+exit_conditions:
+  - 毛利率连续两季环比下滑（扩张趋势逆转）
+  - 营业收入增速转负（量端出问题）
+  - PE 超过行业均值 1.5 倍（充分定价）
+
+execution:
+  strategy_class: dual_ma
+  strategy_params:
+    fast_period: 15
+    slow_period: 45
+
+parameters:
+  gross_margin_improvement: 3.0
+  consecutive_quarters: 2
+  profit_growth_min: 15.0
+  revenue_growth_min: 0.0
+  stop_loss_pct: 0.08
+  take_profit_pct: 0.25
+
+risk_notes: |
+  毛利率数据来自季报，更新频率低，信号具有一定滞后性。
+  毛利率提升可能来自会计准则变更或产品结构变化，需细读财报。
+  行业整体毛利率都在提升时，个股优势弱化，需关注相对竞争地位。

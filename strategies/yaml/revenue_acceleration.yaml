@@ -1,0 +1,54 @@
+name: revenue_acceleration
+display_name: 营收加速增长
+description: |
+  营收增速连续两季度提升（加速度为正），叠加毛利率稳定，是成长股最强信号之一。
+
+screener:
+  category: growth
+  category_color: "#a855f7"
+  icon: zap
+  risk: 中高
+  suitable: 成长行情、科技板块牛市
+  holding_period: 2-6个月
+  filters:
+    min_price: 5.0
+    max_pe: 200.0
+    min_pe: 10.0
+  factor_weights:
+    momentum: 4
+    liquidity: 2
+    value: 0
+    pb: 0
+    quality: 5
+    size: 2
+    large_cap: 0
+    graham: 0
+    value_composite: 0
+    float_ratio: 1
+  top_n: 20
+
+entry_conditions:
+  - 最近两季度营收增速均>20%且加速
+  - 毛利率未出现下滑（稳定±2%内）
+  - 归母净利润增速 > 营收增速（利润质量高）
+  - PE < 行业平均的1.2倍
+
+exit_conditions:
+  - 营收增速开始减速
+  - 或毛利率连续两季度下降超过2%
+  - 或盈利超过 40%
+  - 或亏损超过 12%
+
+execution:
+  strategy_class: factor_ranking
+  strategy_params:
+    primary_factor: revenue_growth
+
+parameters:
+  min_revenue_growth: 0.20
+  gross_margin_stability: 0.02
+  stop_loss_pct: 0.12
+  take_profit_pct: 0.40
+
+risk_notes: |
+  高成长股估值泡沫风险大，建议结合市场情绪和估值分位数控制仓位。

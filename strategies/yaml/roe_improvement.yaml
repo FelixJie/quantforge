@@ -1,0 +1,54 @@
+name: roe_improvement
+display_name: ROE持续改善
+description: |
+  ROE连续4个季度环比提升，且净利润率也在改善，反映企业盈利能力进入上升通道。
+
+screener:
+  category: quality
+  category_color: "#22c55e"
+  icon: trending-up
+  risk: 中
+  suitable: 价值成长混合策略
+  holding_period: 3-9个月
+  filters:
+    min_price: 4.0
+    max_pe: 80.0
+    min_pe: 8.0
+  factor_weights:
+    momentum: 3
+    liquidity: 2
+    value: 3
+    pb: 1
+    quality: 7
+    size: 1
+    large_cap: 1
+    graham: 0
+    value_composite: 1
+    float_ratio: 0
+  top_n: 25
+
+entry_conditions:
+  - ROE连续4季度环比提升
+  - 净利润率同步改善（非规模效应）
+  - 资产负债率未显著上升
+  - 经营现金流为正
+
+exit_conditions:
+  - ROE出现两季度连续下滑
+  - 或业绩预告显示利润下滑
+  - 或盈利超过 25%
+  - 或亏损超过 8%
+
+execution:
+  strategy_class: factor_ranking
+  strategy_params:
+    primary_factor: roe
+
+parameters:
+  roe_improvement_quarters: 4
+  net_margin_improving: true
+  stop_loss_pct: 0.08
+  take_profit_pct: 0.25
+
+risk_notes: |
+  ROE改善需区分是杠杆驱动还是盈利能力提升，优先选择净利润率改善驱动的标的。

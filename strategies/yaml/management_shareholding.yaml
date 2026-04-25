@@ -1,0 +1,53 @@
+name: management_shareholding
+display_name: 管理层增持信号
+description: |
+  董监高在二级市场增持公司股份，内部人掌握最真实信息，增持是最强烈的看好信号。
+
+screener:
+  category: multi_factor
+  category_color: "#8b5cf6"
+  icon: user-check
+  risk: 低中
+  suitable: 熊市底部、股价低估期
+  holding_period: 1-3个月
+  filters:
+    min_price: 3.0
+    max_pe: 80.0
+  factor_weights:
+    momentum: 2
+    liquidity: 3
+    value: 4
+    pb: 2
+    quality: 3
+    size: 1
+    large_cap: 1
+    graham: 0
+    value_composite: 0
+    float_ratio: 0
+  top_n: 20
+
+entry_conditions:
+  - 近30日内董监高累计增持>100万元
+  - 增持均价接近或低于当前股价
+  - 增持后未申报减持
+  - 公司基本面无重大变化
+
+exit_conditions:
+  - 管理层开始减持
+  - 或增持锁定期届满后股价已充分上涨
+  - 或盈利超过 20%
+  - 或亏损超过 8%
+
+execution:
+  strategy_class: event_driven
+  strategy_params:
+    event_type: management_buy
+
+parameters:
+  min_buyback_amount: 1000000
+  lock_period_days: 90
+  stop_loss_pct: 0.08
+  take_profit_pct: 0.20
+
+risk_notes: |
+  需区分是真实市场买入还是股权激励行权，后者不具备同等信号意义。

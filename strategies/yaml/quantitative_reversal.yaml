@@ -1,0 +1,64 @@
+name: quantitative_reversal
+display_name: 多指标共振反转
+description: |
+  同时满足 RSI 超卖、MACD 底背离、布林下轨支撑三重技术指标
+  共振的反转信号，胜率显著高于单一指标。共振越多，反转确信度越高。
+
+screener:
+  category: reversal
+  category_color: "#0891b2"
+  icon: refresh-cw
+  risk: 中
+  suitable: 调整末期、多指标同时发出底部信号时、情绪过度悲观期
+  holding_period: 1-3周
+  filters:
+    min_price: 3.0
+    max_pe: 80.0
+    min_pe: 3.0
+    min_change_pct: -10.0
+  factor_weights:
+    momentum: -4
+    value: 6
+    quality: 5
+    liquidity: 6
+    size: 3
+    pb: 3
+    large_cap: 2
+    graham: 2
+    value_composite: 3
+    float_ratio: 2
+  top_n: 15
+
+entry_conditions:
+  - RSI(14) < 35（超卖，第一共振）
+  - MACD 日线出现底背离（DIF 高于前低，第二共振）
+  - 股价触及或接近布林下轨（第三共振）
+  - 三重共振同时出现（至少满足以上 2-3 个条件）
+  - 近 20 日跌幅 > 15%（有足够调整空间，反弹空间充裕）
+  - 成交量在底部萎缩（空头力量衰竭）
+
+exit_conditions:
+  - RSI 升至 60 以上（超卖完全修复）
+  - 股价回到布林中轨（第一阶段目标位）
+  - 持有满 15 日强制止盈止损
+
+execution:
+  strategy_class: mean_reversion
+  strategy_params:
+    period: 20
+    std_threshold: 2.0
+
+parameters:
+  rsi_oversold: 35
+  macd_divergence: true
+  boll_lower_touch: true
+  drawdown_min: 15.0
+  min_signals: 2
+  stop_loss_pct: 0.06
+  take_profit_pct: 0.12
+  max_hold_days: 15
+
+risk_notes: |
+  共振越多胜率越高，但满足3重共振的机会也越少，需保持耐心等待。
+  不要在高位出现的"假共振"（近期涨幅大的股出现短期超卖）中入场。
+  熊市中技术指标失效概率更高，此策略主要适用于震荡市和牛市回调。

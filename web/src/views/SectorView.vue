@@ -16,11 +16,11 @@
       </button>
     </div>
 
-    <!-- ══ INDUSTRY tab — sortable summary table ══ -->
-    <template v-if="tab === 'industry'">
+    <!-- ══ INDUSTRY / CONCEPT — sortable summary table ══ -->
+    <template v-if="tab === 'industry' || tab === 'concept'">
       <div v-if="loadingBoards" class="card loading-card">
         <span class="spinner"></span>
-        <span class="text-2">加载行业板块汇总（含成分股估值，首次较慢）...</span>
+        <span class="text-2">加载{{ boardLabel }}汇总（含成分股估值，首次较慢）...</span>
       </div>
 
       <div v-if="!loadingBoards && summaryError" class="error-box">{{ summaryError }}</div>
@@ -29,7 +29,7 @@
         <!-- Treemap heatmap -->
         <div class="card chart-card">
           <div class="chart-header">
-            <span class="text-1 fw-600">行业板块热力图</span>
+            <span class="text-1 fw-600">{{ boardLabel }}热力图</span>
             <span class="text-3" style="font-size:11px">面积=市值，颜色=涨跌幅，点击板块查看成分股</span>
           </div>
           <v-chart :option="treemapOption" autoresize style="height:340px" @click="onTreemapClick" />
@@ -136,127 +136,6 @@
       </template>
     </template>
 
-    <!-- ══ CONCEPT tab — board list + constituents ══ -->
-    <template v-if="tab === 'concept'">
-      <div v-if="loadingBoards" class="card loading-card">
-        <span class="spinner"></span>
-        <span class="text-2">加载概念板块数据...</span>
-      </div>
-
-      <template v-if="!loadingBoards && currentBoards.length">
-        <div class="card chart-card">
-          <div class="chart-header">
-            <span class="text-1 fw-600">概念板块热力图</span>
-            <span class="text-3" style="font-size:11px">面积=市值，颜色=涨跌幅，点击板块查看成分股</span>
-          </div>
-          <v-chart :option="treemapOption" autoresize style="height:340px" @click="onTreemapClick" />
-        </div>
-
-        <div class="board-controls card">
-          <div class="board-search-wrap">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <input class="board-search" v-model="boardQuery" placeholder="搜索板块名称..." />
-          </div>
-          <div class="sort-chips">
-            <button v-for="s in sortOptions" :key="s.key"
-              :class="['sort-chip', sortKey === s.key ? 'active' : '']"
-              @click="toggleSort(s.key)">
-              {{ s.label }}{{ sortKey === s.key ? (sortAsc ? ' ↑' : ' ↓') : '' }}
-            </button>
-          </div>
-          <span class="text-3" style="font-size:11px">共 {{ currentBoards.length }} 个板块</span>
-        </div>
-
-        <div class="board-layout">
-          <div class="board-list card">
-            <div class="board-list-inner">
-              <div
-                v-for="b in filteredSortedBoards" :key="b.name"
-                :class="['board-row', selectedBoard === b.name ? 'selected' : '']"
-                @click="selectBoard(b.name)"
-              >
-                <div class="board-row-main">
-                  <span class="board-name">{{ b.name }}</span>
-                  <span :class="['board-chg', (b.change_pct ?? 0) >= 0 ? 'up' : 'down']">
-                    {{ b.change_pct != null ? ((b.change_pct >= 0 ? '+' : '') + b.change_pct.toFixed(2) + '%') : '—' }}
-                  </span>
-                </div>
-                <div class="board-row-meta">
-                  <span class="text-3">↑{{ b.up_count }} ↓{{ b.down_count }}</span>
-                  <span class="text-3">换手 {{ b.turnover_rate?.toFixed(2) ?? '—' }}%</span>
-                  <span v-if="b.leader" class="leader-tag">
-                    {{ b.leader }}
-                    <span :class="(b.leader_change ?? 0) >= 0 ? 'up' : 'down'">
-                      {{ b.leader_change != null ? ((b.leader_change >= 0 ? '+' : '') + b.leader_change.toFixed(2) + '%') : '' }}
-                    </span>
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="stocks-panel">
-            <div v-if="!selectedBoard" class="card empty-stocks">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-              <p class="text-3">点击左侧板块查看成分股</p>
-            </div>
-
-            <div v-if="selectedBoard && loadingStocks" class="card loading-card">
-              <span class="spinner spinner-sm"></span>
-              <span class="text-2" style="font-size:13px">加载 {{ selectedBoard }} 成分股...</span>
-            </div>
-
-            <template v-if="selectedBoard && !loadingStocks && boardStocks.length">
-              <div class="card stocks-header">
-                <span class="text-1 fw-600">{{ selectedBoard }}</span>
-                <span class="text-3" style="font-size:11px">{{ boardStocks.length }} 只成分股</span>
-              </div>
-
-              <div v-if="boardSummary" class="card board-summary">
-                <div class="summary-grid">
-                  <div class="summary-tile"><span class="summary-label">平均涨跌</span><span :class="['summary-value', (boardSummary.avgChange ?? 0) >= 0 ? 'pos' : 'neg']">{{ boardSummary.avgChange != null ? ((boardSummary.avgChange >= 0 ? '+' : '') + boardSummary.avgChange.toFixed(2) + '%') : '—' }}</span></div>
-                  <div class="summary-tile"><span class="summary-label">平均PE</span><span class="summary-value">{{ boardSummary.avgPe != null ? boardSummary.avgPe.toFixed(1) : '—' }}</span></div>
-                  <div class="summary-tile"><span class="summary-label">PE中位数</span><span class="summary-value">{{ boardSummary.medianPe != null ? boardSummary.medianPe.toFixed(1) : '—' }}</span></div>
-                  <div class="summary-tile"><span class="summary-label">平均PB</span><span class="summary-value">{{ boardSummary.avgPb != null ? boardSummary.avgPb.toFixed(2) : '—' }}</span></div>
-                  <div class="summary-tile"><span class="summary-label">平均换手</span><span class="summary-value">{{ boardSummary.avgTurnover != null ? boardSummary.avgTurnover.toFixed(2) + '%' : '—' }}</span></div>
-                  <div class="summary-tile"><span class="summary-label">成交额</span><span class="summary-value">{{ fmtAmount(boardSummary.amount) }}</span></div>
-                  <div class="summary-tile"><span class="summary-label">涨停</span><span class="summary-value pos">{{ boardSummary.limitUp }}</span></div>
-                </div>
-              </div>
-
-              <div class="card stocks-table-wrap">
-                <table class="data-table">
-                  <thead>
-                    <tr>
-                      <th>代码</th><th>名称</th><th>现价</th><th>涨跌%</th><th>换手率</th><th>PE</th><th>PB</th><th></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="s in boardStocks" :key="s.code" class="stock-row">
-                      <td><span class="mono accent">{{ s.code }}</span></td>
-                      <td class="stock-name">{{ s.name }}</td>
-                      <td class="mono">{{ s.price?.toFixed(2) ?? '—' }}</td>
-                      <td :class="(s.change_pct ?? 0) >= 0 ? 'pos' : 'neg'">
-                        {{ s.change_pct != null ? ((s.change_pct >= 0 ? '+' : '') + s.change_pct.toFixed(2) + '%') : '—' }}
-                      </td>
-                      <td class="mono text-3">{{ s.turnover_rate?.toFixed(2) ?? '—' }}%</td>
-                      <td class="mono text-3">{{ s.pe?.toFixed(1) ?? '—' }}</td>
-                      <td class="mono text-3">{{ s.pb?.toFixed(2) ?? '—' }}</td>
-                      <td><router-link :to="{ path: '/backtest', query: { symbol: s.code } }" class="action-link">回测</router-link></td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </template>
-
-            <div v-if="selectedBoard && !loadingStocks && !boardStocks.length" class="card empty-stocks">
-              <p class="text-3">暂无成分股数据</p>
-            </div>
-          </div>
-        </div>
-      </template>
-    </template>
-
     <!-- ══ FUND FLOW tab ══ -->
     <template v-if="tab === 'flow'">
       <div class="flow-header card">
@@ -336,7 +215,7 @@ import axios from 'axios'
 
 const tab             = ref('industry')
 const industrySummary = ref([])
-const conceptBoards   = ref([])
+const conceptSummary  = ref([])
 const selectedBoard   = ref('')
 const boardStocks     = ref([])
 const flowData        = ref([])
@@ -350,14 +229,7 @@ const sortAsc         = ref(false)
 const flowError       = ref('')
 const summaryError    = ref('')
 
-const sortOptions = [
-  { key: 'change_pct',    label: '涨跌幅' },
-  { key: 'turnover_rate', label: '换手率' },
-  { key: 'up_count',      label: '上涨家数' },
-  { key: 'market_cap',    label: '总市值' },
-]
-
-// Industry summary table columns (sortable headers)
+// Sortable summary table columns (click header to sort)
 const summaryCols = [
   { key: 'change_pct',    label: '涨跌%' },
   { key: 'up_count',      label: '涨/跌' },
@@ -371,8 +243,10 @@ const summaryCols = [
 
 // ── Data ────────────────────────────────────────────────────────────────────
 
+const boardLabel = computed(() => (tab.value === 'concept' ? '概念板块' : '行业板块'))
+
 const currentBoards = computed(() =>
-  tab.value === 'industry' ? industrySummary.value : conceptBoards.value
+  tab.value === 'concept' ? conceptSummary.value : industrySummary.value
 )
 
 const filteredSortedBoards = computed(() => {
@@ -440,30 +314,22 @@ async function switchTab(t) {
   sortKey.value = 'change_pct'
   sortAsc.value = false
   if (t === 'industry' && !industrySummary.value.length) await loadSummary()
-  if (t === 'concept'  && !conceptBoards.value.length)   await loadBoards('concept')
+  if (t === 'concept'  && !conceptSummary.value.length)  await loadSummary()
   if (t === 'flow'     && !flowData.value.length)         await loadFlow()
 }
 
 async function loadSummary(force = false) {
+  const kind = tab.value === 'concept' ? 'concept' : 'industry'
   loadingBoards.value = true
   summaryError.value = ''
   if (force) { selectedBoard.value = ''; boardStocks.value = [] }
   try {
-    const res = await axios.get('/api/sector/industry-summary')
-    industrySummary.value = res.data.boards || []
+    const res = await axios.get(`/api/sector/${kind}-summary`)
+    const boards = res.data.boards || []
+    if (kind === 'concept') conceptSummary.value = boards
+    else                    industrySummary.value = boards
   } catch (e) {
-    summaryError.value = e.response?.data?.detail || '行业板块汇总数据获取失败'
-  }
-  loadingBoards.value = false
-}
-
-async function loadBoards(type) {
-  loadingBoards.value = true
-  try {
-    const res = await axios.get(`/api/sector/${type}`)
-    if (type === 'concept') conceptBoards.value = res.data.boards || []
-  } catch (e) {
-    console.error('Load boards failed:', e.response?.data?.detail || e.message)
+    summaryError.value = e.response?.data?.detail || `${boardLabel.value}汇总数据获取失败`
   }
   loadingBoards.value = false
 }
@@ -474,8 +340,8 @@ async function selectBoard(name) {
   loadingStocks.value = true
   boardStocks.value = []
   try {
-    const endpoint = tab.value === 'industry' ? 'industry' : 'concept'
-    const res = await axios.get(`/api/sector/${endpoint}/${encodeURIComponent(name)}`)
+    const kind = tab.value === 'concept' ? 'concept' : 'industry'
+    const res = await axios.get(`/api/sector/${kind}/${encodeURIComponent(name)}`)
     boardStocks.value = res.data.stocks || []
   } catch (e) {
     console.error('Load stocks failed:', e.response?.data?.detail || e.message)
@@ -636,12 +502,9 @@ onMounted(() => {
 .board-controls { display: flex; align-items: center; gap: 12px; padding: 10px 14px; flex-wrap: wrap; }
 .board-search-wrap { display: flex; align-items: center; gap: 6px; background: var(--bg-base); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 5px 10px; }
 .board-search { background: transparent; border: none; color: var(--text-1); font-size: 13px; outline: none; width: 180px; }
-.sort-chips { display: flex; gap: 4px; }
-.sort-chip { font-size: 11px; padding: 3px 9px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 4px; color: var(--text-3); cursor: pointer; transition: all 0.12s; white-space: nowrap; }
-.sort-chip.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
 .btn-sm { padding: 5px 12px; font-size: 12px; }
 
-/* Industry summary table */
+/* Summary table */
 .summary-table-wrap { overflow-x: auto; max-height: 620px; overflow-y: auto; }
 .summary-table { width: 100%; }
 .summary-table th.th-sort { cursor: pointer; user-select: none; white-space: nowrap; }
@@ -656,27 +519,7 @@ onMounted(() => {
 .pe-high { color: #f59e0b; font-weight: 600; }
 .pe-very-high { color: #f04060; font-weight: 600; }
 
-/* Board layout (concept) */
-.board-layout { display: grid; grid-template-columns: 320px 1fr; gap: 14px; align-items: start; }
-.board-list { overflow: hidden; }
-.board-list-inner { max-height: 560px; overflow-y: auto; }
-.board-row { padding: 10px 14px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.1s; }
-.board-row:last-child { border-bottom: none; }
-.board-row:hover { background: var(--bg-hover); }
-.board-row.selected { background: var(--accent-dim); border-left: 3px solid var(--accent); padding-left: 11px; }
-.board-row-main { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
-.board-name { font-size: 13px; font-weight: 600; color: var(--text-1); }
-.board-chg { font-size: 13px; font-weight: 700; font-family: var(--font-mono); }
-.board-chg.up { color: #f87171; }
-.board-chg.down { color: #4ade80; }
-.board-row-meta { display: flex; gap: 10px; flex-wrap: wrap; }
-.leader-tag { font-size: 10px; color: var(--text-3); }
-.up { color: #f87171; }
-.down { color: #4ade80; }
-
 /* Stocks panel */
-.stocks-panel { display: flex; flex-direction: column; gap: 10px; }
-.empty-stocks { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 60px; text-align: center; }
 .stocks-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; }
 .stocks-table-wrap { overflow-x: auto; max-height: 500px; overflow-y: auto; }
 .stock-name { font-size: 13px; color: var(--text-1); }
@@ -691,6 +534,8 @@ onMounted(() => {
 .summary-value { font-size: 16px; font-weight: 700; font-family: var(--font-mono); color: var(--text-1); }
 .summary-value.pos { color: #f87171; }
 .summary-value.neg { color: #4ade80; }
+.pos { color: #f87171; }
+.neg { color: #4ade80; }
 
 /* Fund flow */
 .flow-header { display: flex; align-items: center; gap: 14px; padding: 12px 16px; flex-wrap: wrap; }
@@ -702,7 +547,6 @@ onMounted(() => {
 .row-outflow { background: rgba(34, 197, 94, 0.03); }
 
 @media (max-width: 768px) {
-  .board-layout { grid-template-columns: 1fr; }
   .flow-charts { grid-template-columns: 1fr; }
 }
 </style>

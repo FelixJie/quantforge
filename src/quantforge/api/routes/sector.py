@@ -419,8 +419,10 @@ async def get_fund_flow(indicator: str = Query("今日", enum=["今日", "5日",
 
 # ── Industry summary endpoint ─────────────────────────────────────────────────
 
-async def _industry_stocks_cached(meta: dict) -> list[dict]:
-    ck = f"industry_cons_{meta['name']}"
+async def _node_stocks_cached(meta: dict, prefix: str) -> list[dict]:
+    """Cached constituents for a board, keyed `{prefix}_cons_{name}` so the
+    summary and the drill-down endpoints share the same per-board cache."""
+    ck = f"{prefix}_cons_{meta['name']}"
     cached = _load_cache(ck, _TTL_STOCKS)
     if cached:
         return cached.get("stocks", [])
@@ -456,37 +458,16 @@ def _summarise_industry_board(board: dict, stocks: list[dict]) -> dict:
     }
 
 
-@router.get("/industry-summary")
-async def industry_summary():
-    """All industry boards with aggregated constituent valuations (PE/PB/成交额)."""
-    ck = "industry_summary"
-    cached = _load_cache(ck, _TTL_PE)
-    if cached:
-        return cached
-
-    try:
-        boards = await _sina_boards_cached()
-    except Exception as e:
-        logger.warning(f"Industry summary board list fetch failed: {e}")
-        stale = _load_stale(ck)
-        if stale:
-            return stale
-        raise HTTPException(status_code=503, detail=f"行业板块数据获取失败（数据源不可达）: {e}")
-
-    if not boards:
-        stale = _load_stale(ck)
-        if stale:
-            return stale
-        raise HTTPException(status_code=503, detail="行业板块列表为空")
-
+async def _build_summary(boards: list[dict], prefix: str) -> list[dict]:
+    """Aggregate each board's constituents into board-level valuation stats."""
     sem = asyncio.Semaphore(6)
 
     async def enrich(meta: dict) -> dict:
         async with sem:
             try:
-                stocks = await _industry_stocks_cached(meta)
+                stocks = await _node_stocks_cached(meta, prefix)
             except Exception as e:
-                logger.debug(f"Industry summary cons fetch failed for {meta['name']}: {e}")
+                logger.debug(f"{prefix} summary cons fetch failed for {meta['name']}: {e}")
                 stocks = []
 
         up = sum(1 for s in stocks if (s.get("change_pct") or 0) > 0)
@@ -507,7 +488,43 @@ async def industry_summary():
         }
         return _summarise_industry_board(board, stocks)
 
-    enriched = await asyncio.gather(*[enrich(b) for b in boards])
-    result = {"boards": enriched, "count": len(enriched), "type": "industry"}
+    return await asyncio.gather(*[enrich(b) for b in boards])
+
+
+async def _summary_endpoint(kind: str, boards_loader, label: str) -> dict:
+    ck = f"{kind}_summary"
+    cached = _load_cache(ck, _TTL_PE)
+    if cached:
+        return cached
+
+    try:
+        boards = await boards_loader()
+    except Exception as e:
+        logger.warning(f"{kind} summary board list fetch failed: {e}")
+        stale = _load_stale(ck)
+        if stale:
+            return stale
+        raise HTTPException(status_code=503, detail=f"{label}数据获取失败（数据源不可达）: {e}")
+
+    if not boards:
+        stale = _load_stale(ck)
+        if stale:
+            return stale
+        raise HTTPException(status_code=503, detail=f"{label}列表为空")
+
+    enriched = await _build_summary(boards, kind)
+    result = {"boards": enriched, "count": len(enriched), "type": kind}
     _save_cache(ck, result)
     return result
+
+
+@router.get("/industry-summary")
+async def industry_summary():
+    """All industry boards with aggregated constituent valuations (PE/PB/成交额)."""
+    return await _summary_endpoint("industry", _sina_boards_cached, "行业板块")
+
+
+@router.get("/concept-summary")
+async def concept_summary():
+    """All concept boards with aggregated constituent valuations (PE/PB/成交额)."""
+    return await _summary_endpoint("concept", _sina_concept_boards_cached, "概念板块")

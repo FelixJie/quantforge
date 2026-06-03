@@ -177,17 +177,12 @@ def _sina_http(url: str, decode: str = "gbk") -> str:
     return _urlreq.urlopen(req, timeout=12).read().decode(decode, "replace")
 
 
-def _sina_industry_list() -> list[dict]:
-    """新浪行业板块列表。
+def _sina_parse_boards(obj: dict) -> list[dict]:
+    """Parse Sina board map → board dicts.
 
-    newSinaHy.php returns ``var ... = {node: "node,name,count,avg_price,
-    avg_chg_amt,avg_chg_pct,volume,amount,leader_symbol,...,leader_name"}``.
+    Each value is CSV: ``node,name,count,avg_price,avg_chg_amt,avg_chg_pct,
+    volume,amount,leader_symbol,...,leader_name``.
     """
-    raw = _sina_http("https://vip.stock.finance.sina.com.cn/q/view/newSinaHy.php")
-    m = _re.search(r"=\s*(\{.*\})", raw, _re.S)
-    if not m:
-        return []
-    obj = json.loads(m.group(1))
     boards = []
     for node, line in obj.items():
         parts = str(line).split(",")
@@ -202,6 +197,22 @@ def _sina_industry_list() -> list[dict]:
             "leader":     parts[12],
         })
     return boards
+
+
+def _sina_board_list(url: str) -> list[dict]:
+    raw = _sina_http(url)
+    m = _re.search(r"=\s*(\{.*\})", raw, _re.S)
+    return _sina_parse_boards(json.loads(m.group(1))) if m else []
+
+
+def _sina_industry_list() -> list[dict]:
+    """新浪行业板块列表 (newSinaHy.php)。"""
+    return _sina_board_list("https://vip.stock.finance.sina.com.cn/q/view/newSinaHy.php")
+
+
+def _sina_concept_list() -> list[dict]:
+    """新浪概念板块列表 (newFLJK.php?param=class)，node 前缀 gn_。"""
+    return _sina_board_list("https://vip.stock.finance.sina.com.cn/q/view/newFLJK.php?param=class")
 
 
 def _sina_node_stocks(node: str, count: int = 0) -> list[dict]:
@@ -248,6 +259,17 @@ async def _sina_boards_cached() -> list[dict]:
     if cached:
         return cached.get("boards", [])
     boards = await asyncio.to_thread(_sina_industry_list)
+    if boards:
+        _save_cache(ck, {"boards": boards})
+    return boards
+
+
+async def _sina_concept_boards_cached() -> list[dict]:
+    ck = "sina_concept_list"
+    cached = _load_cache(ck, _TTL_BOARDS)
+    if cached:
+        return cached.get("boards", [])
+    boards = await asyncio.to_thread(_sina_concept_list)
     if boards:
         _save_cache(ck, {"boards": boards})
     return boards
@@ -310,16 +332,19 @@ async def get_industry_stocks(name: str):
 
 @router.get("/concept")
 async def get_concept_boards():
-    """All A-share concept boards with performance stats."""
+    """All A-share concept boards (Sina). market_cap proxied by turnover so the
+    treemap still renders (Sina's cheap list has no board market cap)."""
     ck = "concept_boards"
     cached = _load_cache(ck, _TTL_BOARDS)
     if cached:
         return cached
 
     try:
-        import akshare as ak
-        df = await asyncio.to_thread(ak.stock_board_concept_name_em)
-        boards = _normalise_boards(df)
+        boards = await _sina_concept_boards_cached()
+        if not boards:
+            raise RuntimeError("空列表")
+        for b in boards:
+            b["market_cap"] = b.get("amount")   # treemap area = turnover
         result = {"boards": boards, "count": len(boards), "type": "concept"}
         _save_cache(ck, result)
         return result
@@ -333,20 +358,24 @@ async def get_concept_boards():
 
 @router.get("/concept/{name}")
 async def get_concept_stocks(name: str):
-    """Constituent stocks for a specific concept board."""
+    """Constituent stocks for a specific concept board (Sina)."""
     ck = f"concept_cons_{name}"
     cached = _load_cache(ck, _TTL_STOCKS)
     if cached:
         return cached
 
     try:
-        import akshare as ak
-        df = await asyncio.to_thread(ak.stock_board_concept_cons_em, name)
-        stocks = _normalise_cons(df)
+        boards = await _sina_concept_boards_cached()
+        meta = next((b for b in boards if b["name"] == name or b["node"] == name), None)
+        if meta is None:
+            raise HTTPException(status_code=404, detail=f"未找到概念板块: {name}")
+        stocks = await asyncio.to_thread(_sina_node_stocks, meta["node"], meta["count"])
         stocks.sort(key=lambda x: x.get("change_pct") or 0, reverse=True)
         result = {"board": name, "stocks": stocks, "count": len(stocks)}
         _save_cache(ck, result)
         return result
+    except HTTPException:
+        raise
     except Exception as e:
         logger.warning(f"Concept cons fetch failed for {name}: {e}")
         stale = _load_stale(ck)

@@ -160,20 +160,113 @@ def _normalise_flow(df: pd.DataFrame) -> list[dict]:
     return result
 
 
+# ── Sina data source (industry boards) ────────────────────────────────────────
+# EastMoney push2 is unreachable behind some proxies (TUN/fake-IP hijack), so
+# industry boards are sourced from Sina Finance, which exposes the board list
+# plus per-constituent PE/PB/market-cap in one place.
+
+import re as _re
+import urllib.request as _urlreq
+
+_SINA_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+_SINA_REFERER = "https://finance.sina.com.cn"
+
+
+def _sina_http(url: str, decode: str = "gbk") -> str:
+    req = _urlreq.Request(url, headers={"User-Agent": _SINA_UA, "Referer": _SINA_REFERER})
+    return _urlreq.urlopen(req, timeout=12).read().decode(decode, "replace")
+
+
+def _sina_industry_list() -> list[dict]:
+    """新浪行业板块列表。
+
+    newSinaHy.php returns ``var ... = {node: "node,name,count,avg_price,
+    avg_chg_amt,avg_chg_pct,volume,amount,leader_symbol,...,leader_name"}``.
+    """
+    raw = _sina_http("https://vip.stock.finance.sina.com.cn/q/view/newSinaHy.php")
+    m = _re.search(r"=\s*(\{.*\})", raw, _re.S)
+    if not m:
+        return []
+    obj = json.loads(m.group(1))
+    boards = []
+    for node, line in obj.items():
+        parts = str(line).split(",")
+        if len(parts) < 13:
+            continue
+        boards.append({
+            "node":       parts[0],
+            "name":       parts[1],
+            "count":      int(float(parts[2])) if parts[2] else 0,
+            "change_pct": _safe_float(parts[5]),
+            "amount":     _safe_float(parts[7]),
+            "leader":     parts[12],
+        })
+    return boards
+
+
+def _sina_node_stocks(node: str, count: int = 0) -> list[dict]:
+    """新浪板块成分股（含 PE/PB/市值），按需翻页。"""
+    per = 80
+    pages = max(1, (count + per - 1) // per) if count else 1
+    stocks = []
+    for page in range(1, pages + 1):
+        url = (
+            "https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/"
+            f"Market_Center.getHQNodeData?page={page}&num={per}&sort=symbol&asc=1"
+            f"&node={node}&symbol=&_s_r_a=page"
+        )
+        try:
+            arr = json.loads(_sina_http(url))
+        except Exception:
+            break
+        if not arr:
+            break
+        for s in arr:
+            mcap_wan = _safe_float(s.get("mktcap"))
+            stocks.append({
+                "code":          _safe_str(s.get("code")),
+                "name":          _safe_str(s.get("name")),
+                "price":         _safe_float(s.get("trade")),
+                "change_pct":    _safe_float(s.get("changepercent")),
+                "volume":        _safe_float(s.get("volume")),
+                "turnover":      _safe_float(s.get("amount")),
+                "high":          _safe_float(s.get("high")),
+                "low":           _safe_float(s.get("low")),
+                "turnover_rate": _safe_float(s.get("turnoverratio")),
+                "pe":            _safe_float(s.get("per")),
+                "pb":            _safe_float(s.get("pb")),
+                "market_cap":    round(mcap_wan * 10000, 2) if mcap_wan else None,  # 万元→元
+            })
+        if len(arr) < per:
+            break
+    return stocks
+
+
+async def _sina_boards_cached() -> list[dict]:
+    ck = "sina_industry_list"
+    cached = _load_cache(ck, _TTL_BOARDS)
+    if cached:
+        return cached.get("boards", [])
+    boards = await asyncio.to_thread(_sina_industry_list)
+    if boards:
+        _save_cache(ck, {"boards": boards})
+    return boards
+
+
 # ── Industry endpoints ────────────────────────────────────────────────────────
 
 @router.get("/industry")
 async def get_industry_boards():
-    """All A-share industry boards with performance stats."""
+    """All A-share industry boards (Sina) with board-level stats."""
     ck = "industry_boards"
     cached = _load_cache(ck, _TTL_BOARDS)
     if cached:
         return cached
 
     try:
-        import akshare as ak
-        df = await asyncio.to_thread(ak.stock_board_industry_name_em)
-        boards = _normalise_boards(df)
+        boards = await _sina_boards_cached()
+        if not boards:
+            raise RuntimeError("空列表")
         result = {"boards": boards, "count": len(boards), "type": "industry"}
         _save_cache(ck, result)
         return result
@@ -187,21 +280,24 @@ async def get_industry_boards():
 
 @router.get("/industry/{name}")
 async def get_industry_stocks(name: str):
-    """Constituent stocks for a specific industry board."""
+    """Constituent stocks for a specific industry board (Sina)."""
     ck = f"industry_cons_{name}"
     cached = _load_cache(ck, _TTL_STOCKS)
     if cached:
         return cached
 
     try:
-        import akshare as ak
-        df = await asyncio.to_thread(ak.stock_board_industry_cons_em, name)
-        stocks = _normalise_cons(df)
-        # Sort by change_pct desc
+        boards = await _sina_boards_cached()
+        meta = next((b for b in boards if b["name"] == name or b["node"] == name), None)
+        if meta is None:
+            raise HTTPException(status_code=404, detail=f"未找到行业板块: {name}")
+        stocks = await asyncio.to_thread(_sina_node_stocks, meta["node"], meta["count"])
         stocks.sort(key=lambda x: x.get("change_pct") or 0, reverse=True)
         result = {"board": name, "stocks": stocks, "count": len(stocks)}
         _save_cache(ck, result)
         return result
+    except HTTPException:
+        raise
     except Exception as e:
         logger.warning(f"Industry cons fetch failed for {name}: {e}")
         stale = _load_stale(ck)
@@ -294,16 +390,15 @@ async def get_fund_flow(indicator: str = Query("今日", enum=["今日", "5日",
 
 # ── Industry summary endpoint ─────────────────────────────────────────────────
 
-async def _get_industry_stocks_cached(name: str) -> list[dict]:
-    ck = f"industry_cons_{name}"
+async def _industry_stocks_cached(meta: dict) -> list[dict]:
+    ck = f"industry_cons_{meta['name']}"
     cached = _load_cache(ck, _TTL_STOCKS)
     if cached:
         return cached.get("stocks", [])
-    import akshare as ak
-    df = await asyncio.to_thread(ak.stock_board_industry_cons_em, name)
-    stocks = _normalise_cons(df)
+    stocks = await asyncio.to_thread(_sina_node_stocks, meta["node"], meta["count"])
     stocks.sort(key=lambda x: x.get("change_pct") or 0, reverse=True)
-    _save_cache(ck, {"board": name, "stocks": stocks, "count": len(stocks)})
+    if stocks:
+        _save_cache(ck, {"board": meta["name"], "stocks": stocks, "count": len(stocks)})
     return stocks
 
 
@@ -340,42 +435,50 @@ async def industry_summary():
     if cached:
         return cached
 
-    live = True
     try:
-        import akshare as ak
-        df = await asyncio.to_thread(ak.stock_board_industry_name_em)
-        boards = _normalise_boards(df)
+        boards = await _sina_boards_cached()
     except Exception as e:
-        # Data source unreachable — fall back to whatever is cached so the
-        # board list still renders (valuations filled from per-board caches).
-        logger.warning(f"Industry summary board list fetch failed, using cache: {e}")
-        live = False
-        stale_summary = _load_stale(ck)
-        if stale_summary:
-            return stale_summary
-        stale_boards = _load_stale("industry_boards")
-        if not stale_boards or not stale_boards.get("boards"):
-            raise HTTPException(status_code=503, detail=f"行业板块数据获取失败（数据源不可达）: {e}")
-        boards = stale_boards["boards"]
+        logger.warning(f"Industry summary board list fetch failed: {e}")
+        stale = _load_stale(ck)
+        if stale:
+            return stale
+        raise HTTPException(status_code=503, detail=f"行业板块数据获取失败（数据源不可达）: {e}")
 
-    sem = asyncio.Semaphore(8)
+    if not boards:
+        stale = _load_stale(ck)
+        if stale:
+            return stale
+        raise HTTPException(status_code=503, detail="行业板块列表为空")
 
-    async def enrich(board: dict) -> dict:
+    sem = asyncio.Semaphore(6)
+
+    async def enrich(meta: dict) -> dict:
         async with sem:
             try:
-                if live:
-                    stocks = await _get_industry_stocks_cached(board["name"])
-                else:
-                    # Offline: only use already-cached constituents, no network.
-                    cached = _load_stale(f"industry_cons_{board['name']}")
-                    stocks = cached.get("stocks", []) if cached else []
+                stocks = await _industry_stocks_cached(meta)
             except Exception as e:
-                logger.debug(f"Industry summary cons fetch failed for {board['name']}: {e}")
+                logger.debug(f"Industry summary cons fetch failed for {meta['name']}: {e}")
                 stocks = []
+
+        up = sum(1 for s in stocks if (s.get("change_pct") or 0) > 0)
+        down = sum(1 for s in stocks if (s.get("change_pct") or 0) < 0)
+        mcap = sum(s["market_cap"] for s in stocks if s.get("market_cap"))
+        turs = [s["turnover_rate"] for s in stocks if s.get("turnover_rate") is not None]
+        leader = max(stocks, key=lambda s: s.get("change_pct") or -1e9, default=None)
+
+        board = {
+            "name":          meta["name"],
+            "change_pct":    meta.get("change_pct"),
+            "market_cap":    round(mcap, 2) if mcap else None,
+            "turnover_rate": round(sum(turs) / len(turs), 4) if turs else None,
+            "up_count":      up,
+            "down_count":    down,
+            "leader":        (leader or {}).get("name") or meta.get("leader", ""),
+            "leader_change": (leader or {}).get("change_pct"),
+        }
         return _summarise_industry_board(board, stocks)
 
     enriched = await asyncio.gather(*[enrich(b) for b in boards])
-    result = {"boards": enriched, "count": len(enriched), "type": "industry", "live": live}
-    if live:
-        _save_cache(ck, result)
+    result = {"boards": enriched, "count": len(enriched), "type": "industry"}
+    _save_cache(ck, result)
     return result

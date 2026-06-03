@@ -7,6 +7,7 @@ from functools import lru_cache
 from quantforge.backtest.engine import BacktestEngine
 from quantforge.core.settings import Settings
 from quantforge.portfolio.manager import PortfolioManager
+from quantforge.api.routes.auth import get_current_user
 
 
 @lru_cache(maxsize=1)

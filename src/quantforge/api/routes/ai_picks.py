@@ -285,7 +285,7 @@ async def _call_ai(candidates: list[dict]) -> dict:
     raw = await chat(
         system=_SYSTEM_PROMPT,
         user=user_prompt,
-        max_tokens=4000,
+        max_tokens=8192,
         caller="ai_picks",
     )
 

@@ -1,9 +1,10 @@
 """News and announcements API routes.
 
-Data sources:
-  - 东方财富快讯 (flash news, real-time)
-  - 东方财富公告 (announcements)
-  - 股票个股新闻
+Data sources (4个数据源):
+  1. akshare·个股新闻 - 东财个股新闻 (stock_news_em)
+  2. akshare·财联社快讯 - 电报 (stock_info_global_cls)
+  3. akshare·东财全球资讯 - 全球财经新闻聚合 (stock_info_global_em)
+  4. 东方财富公告 (announcements)
 Cache: disk-based, tiered TTL (flash=3min, announcements=15min)
 """
 
@@ -23,8 +24,8 @@ router = APIRouter(prefix="/news", tags=["news"])
 
 # ── Source URLs ────────────────────────────────────────────────────────────────
 _EM_ANN_URL   = "https://np-anotice-stock.eastmoney.com/api/security/ann"
-_SINA_FLASH   = "https://feed.mix.sina.com.cn/api/roll/get"   # 新浪财经快讯
-_THS_FLASH    = "https://news.10jqka.com.cn/tapp/news/push/stock/"  # 同花顺快讯
+_THS_FLASH    = "https://news.10jqka.com.cn/tapp/news/push/stock/"  # 同花顺快讯(含财联社内容)
+_SINA_FLASH   = "https://feed.mix.sina.com.cn/api/roll/get"
 
 _HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -33,6 +34,15 @@ _HEADERS = {
     "Accept": "application/json, text/plain, */*",
     "Accept-Language": "zh-CN,zh;q=0.9",
 }
+
+# ── Akshare数据源初始化 ─────────────────────────────────────────────────────────
+_AKSHARE_AVAILABLE = False
+try:
+    import akshare as ak
+    _AKSHARE_AVAILABLE = True
+    logger.info("akshare数据源已加载")
+except ImportError:
+    logger.warning("akshare未安装，将使用备用数据源")
 
 _CACHE_DIR = Path("data/cache/news")
 
@@ -143,7 +153,150 @@ def _fmt_time(raw: str) -> tuple[str, str]:
     return "", raw
 
 
-# ── Flash news — 新浪 + 同花顺双源合并 ────────────────────────────────────────
+# ── Akshare数据源1: 个股新闻 (stock_news_em) ────────────────────────────────────
+
+def _fetch_akshare_stock_news(symbol: str = "", page_size: int = 30) -> list[dict]:
+    """akshare·个股新闻 - 东财个股新闻"""
+    if not _AKSHARE_AVAILABLE:
+        return []
+    try:
+        df = None
+        if symbol:
+            df = ak.stock_news_em(symbol=symbol)
+        else:
+            # 如果没有指定股票，获取市场新闻
+            df = ak.stock_news_em(symbol="000001")  # 默认拿一个股票的
+        if df is None or df.empty:
+            return []
+        
+        result = []
+        for _, row in df.head(page_size).iterrows():
+            title = str(row.get("新闻标题", ""))
+            content = _clean_content(str(row.get("新闻内容", "")))
+            pub_time = str(row.get("发布时间", ""))
+            date_str, time_str = _parse_time(pub_time)
+            source = "akshare·个股新闻"
+            
+            result.append({
+                "id": f"stock_news_{_}",
+                "title": title,
+                "content": content,
+                "date": date_str,
+                "time": time_str,
+                "source": source,
+                "url": str(row.get("文章链接", "")),
+                "type": "news",
+                "category": "个股",
+                "sentiment": _score_sentiment(title + content),
+                "stocks": [{"code": symbol, "name": ""}] if symbol else [],
+            })
+        return result
+    except Exception as e:
+        logger.warning(f"akshare个股新闻获取失败: {e}")
+        return []
+
+# ── Akshare数据源2: 财联社快讯 (stock_info_global_cls) ──────────────────────────
+
+def _fetch_akshare_cls_telegraph(page_size: int = 40) -> list[dict]:
+    """akshare·财联社快讯 - 电报"""
+    if not _AKSHARE_AVAILABLE:
+        return []
+    try:
+        df = ak.stock_info_global_cls()
+        if df is None or df.empty:
+            return []
+        
+        result = []
+        for _, row in df.head(page_size).iterrows():
+            title = str(row.get("标题", ""))
+            content = _clean_content(str(row.get("内容", "")))
+            pub_time = str(row.get("发布时间", ""))
+            date_str, time_str = _parse_time(pub_time)
+            
+            result.append({
+                "id": f"cls_telegraph_{_}",
+                "title": title,
+                "content": content,
+                "date": date_str,
+                "time": time_str,
+                "source": "akshare·财联社快讯",
+                "url": "",
+                "type": "flash",
+                "category": "快讯",
+                "sentiment": _score_sentiment(title + content),
+                "stocks": [],
+            })
+        return result
+    except Exception as e:
+        logger.warning(f"akshare财联社快讯获取失败: {e}")
+        return []
+
+# ── Akshare数据源3: 东财全球资讯 (stock_info_global_em) ─────────────────────────
+
+def _fetch_akshare_global_news(page_size: int = 40) -> list[dict]:
+    """akshare·东财全球资讯 - 全球财经新闻聚合"""
+    if not _AKSHARE_AVAILABLE:
+        return []
+    try:
+        df = ak.stock_info_global_em()
+        if df is None or df.empty:
+            return []
+        
+        result = []
+        for _, row in df.head(page_size).iterrows():
+            title = str(row.get("标题", ""))
+            content = _clean_content(str(row.get("内容", "")))
+            pub_time = str(row.get("发布时间", ""))
+            date_str, time_str = _parse_time(pub_time)
+            
+            result.append({
+                "id": f"global_news_{_}",
+                "title": title,
+                "content": content,
+                "date": date_str,
+                "time": time_str,
+                "source": "akshare·东财全球资讯",
+                "url": "",
+                "type": "news",
+                "category": "全球",
+                "sentiment": _score_sentiment(title + content),
+                "stocks": [],
+            })
+        return result
+    except Exception as e:
+        logger.warning(f"akshare东财全球资讯获取失败: {e}")
+        return []
+
+# ── 辅助函数: 时间解析 ─────────────────────────────────────────────────────────
+
+def _parse_time(time_str: str) -> tuple[str, str]:
+    """解析各种时间格式，返回(date, time)"""
+    if not time_str:
+        return "", ""
+    time_str = time_str.strip()
+    
+    # 尝试多种格式
+    formats = [
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%d %H:%M",
+        "%Y/%m/%d %H:%M:%S",
+        "%Y/%m/%d %H:%M",
+    ]
+    
+    for fmt in formats:
+        try:
+            dt = _dt.datetime.strptime(time_str, fmt)
+            return dt.strftime("%Y-%m-%d"), dt.strftime("%H:%M")
+        except ValueError:
+            continue
+    
+    # 如果都失败了，尝试简单分割
+    parts = time_str.split()
+    if len(parts) >= 2:
+        return parts[0], parts[1]
+    return parts[0] if parts else "", ""
+
+# ── Flash news — 同花顺(财联社来源优先) + akshare数据源 ────────────────────────
 
 def _ts_to_datetime(ts) -> tuple[str, str]:
     """Convert Unix timestamp (int or str) to (date, time) strings."""
@@ -154,44 +307,8 @@ def _ts_to_datetime(ts) -> tuple[str, str]:
         return "", ""
 
 
-def _fetch_sina_flash(page_size: int = 30) -> list[dict]:
-    """新浪财经快讯 — lid=2516 财经要闻。"""
-    try:
-        r = requests.get(
-            _SINA_FLASH,
-            params={"pageid": "153", "lid": "2516", "num": str(page_size), "page": "1"},
-            headers=_HEADERS, timeout=10,
-        )
-        r.raise_for_status()
-        items = r.json().get("result", {}).get("data", []) or []
-        result = []
-        for it in items:
-            title = it.get("title", "") or it.get("stitle", "")
-            content = _clean_content(it.get("intro", "") or it.get("summary", ""))
-            date_str, time_str = _ts_to_datetime(it.get("ctime") or it.get("intime", 0))
-            url = it.get("url", "") or it.get("wapurl", "")
-            source = it.get("media_name", "") or "新浪财经"
-            result.append({
-                "id": str(it.get("docid", "") or it.get("oid", "")),
-                "title": title,
-                "content": content,
-                "date": date_str,
-                "time": time_str,
-                "source": source,
-                "url": url,
-                "type": "flash",
-                "category": _detect_category(title + content),
-                "sentiment": _score_sentiment(title + content),
-                "stocks": [],
-            })
-        return result
-    except Exception as e:
-        logger.warning(f"Sina flash fetch failed: {e}")
-        return []
-
-
-def _fetch_ths_flash(page_size: int = 30) -> list[dict]:
-    """同花顺快讯 — 含个股关联和情绪色值。"""
+def _fetch_ths_flash(page_size: int = 50) -> list[dict]:
+    """同花顺快讯 — 含个股关联和情绪色值，包含财联社来源。"""
     try:
         r = requests.get(
             _THS_FLASH,
@@ -206,7 +323,6 @@ def _fetch_ths_flash(page_size: int = 30) -> list[dict]:
             title = it.get("title", "")
             content = _clean_content(it.get("digest", ""))
             date_str, time_str = _ts_to_datetime(it.get("ctime", 0))
-            # color: "1"=red(positive in A-share), "2"=green(negative), "0"=neutral
             color = str(it.get("color", "0"))
             sentiment = "positive" if color == "1" else "negative" if color == "2" else _score_sentiment(title + content)
             stocks_raw = it.get("stock", []) or []
@@ -219,7 +335,7 @@ def _fetch_ths_flash(page_size: int = 30) -> list[dict]:
                 "content": content,
                 "date": date_str,
                 "time": time_str,
-                "source": it.get("source", "") or "同花顺",
+                "source": "财联社",
                 "url": it.get("url", ""),
                 "type": "flash",
                 "category": category,
@@ -233,19 +349,25 @@ def _fetch_ths_flash(page_size: int = 30) -> list[dict]:
 
 
 def _fetch_flash(page_size: int = 40) -> list[dict]:
-    """合并新浪 + 同花顺快讯，去重后按时间降序。"""
-    sina = _fetch_sina_flash(page_size)
-    ths  = _fetch_ths_flash(page_size)
+    """合并4个数据源的快讯: 财联社+akshare3个数据源"""
+    # 获取各个数据源
+    ths_items = _fetch_ths_flash(page_size // 2)
+    cls_items = _fetch_akshare_cls_telegraph(page_size // 4)
+    global_items = _fetch_akshare_global_news(page_size // 4)
+    
+    # 合并并去重
+    all_items = ths_items + cls_items + global_items
     seen = set()
-    merged = []
-    for item in ths + sina:   # THS has stocks info, put first
-        key = item["title"][:30]
-        if key not in seen and item["title"]:
+    unique_items = []
+    for item in all_items:
+        key = item["title"][:50] if item["title"] else str(item["id"])
+        if key not in seen:
             seen.add(key)
-            merged.append(item)
-    # Sort by date+time descending
-    merged.sort(key=lambda x: (x["date"], x["time"]), reverse=True)
-    return merged[:page_size]
+            unique_items.append(item)
+    
+    # 按时间排序
+    unique_items.sort(key=lambda x: (x["date"], x["time"]), reverse=True)
+    return unique_items[:page_size]
 
 
 # ── Announcements (东方财富公告) ───────────────────────────────────────────────
@@ -332,14 +454,17 @@ def _fetch_ths_stock_news(symbol: str, page_size: int = 20) -> list[dict]:
 
 
 def _fetch_stock_news(symbol: str, page_size: int = 20) -> list[dict]:
-    """THS个股新闻 + 东财公告合并。"""
-    ths = _fetch_ths_stock_news(symbol, page_size)
-    anns = _fetch_announcements(symbol, min(page_size, 20))
+    """akshare个股新闻 + THS个股新闻 + 东财公告合并。"""
+    # 优先使用akshare
+    ak_items = _fetch_akshare_stock_news(symbol, page_size // 2)
+    ths = _fetch_ths_stock_news(symbol, page_size // 2)
+    anns = _fetch_announcements(symbol, min(page_size, 15))
     ann_items = [_format_announcement(it) for it in anns]
+    
     # Merge, deduplicate by title prefix
     seen = set()
     merged = []
-    for item in ths + ann_items:
+    for item in ak_items + ths + ann_items:
         key = item["title"][:30]
         if key not in seen and item["title"]:
             seen.add(key)

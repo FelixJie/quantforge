@@ -1,214 +1,328 @@
 <template>
   <div class="vfy-wrap">
 
-    <!-- ── Header ─────────────────────────────────────────────────────── -->
-    <div class="vfy-header card">
-      <!-- Row 1: title + verify -->
-      <div class="hd-row hd-row-top">
-        <div class="hd-title">推荐验证</div>
-        <div class="hd-right">
-          <span v-if="verifyMsg" :class="['vmsg', verifyMsg.type]">{{ verifyMsg.text }}</span>
-          <label class="force-label">
-            <input type="checkbox" v-model="forceVerify" class="force-cb" />
-            <span>强制重验</span>
-          </label>
-          <button class="btn-verify" @click="triggerVerify" :disabled="verifying">
-            {{ verifying ? '验证中…' : '验证选定区间' }}
-          </button>
+    <!-- ── Tabs ─────────────────────────────────────────────────────── -->
+    <div class="tabs-container">
+      <button 
+        class="tab-btn" 
+        :class="{ active: activeTab === 'ai' }"
+        @click="activeTab = 'ai'"
+      >
+        AI 推荐验证
+      </button>
+      <button 
+        class="tab-btn" 
+        :class="{ active: activeTab === 'watchlist' }"
+        @click="activeTab = 'watchlist'"
+      >
+        自选股验证
+      </button>
+    </div>
+
+    <!-- ── AI Recommendations Tab ─────────────────────────────────────── -->
+    <div v-if="activeTab === 'ai'" class="tab-content">
+      <!-- Header -->
+      <div class="vfy-header card">
+        <div class="hd-row hd-row-top">
+          <div class="hd-title">推荐验证</div>
+          <div class="hd-right">
+            <span v-if="verifyMsg" :class="['vmsg', verifyMsg.type]">{{ verifyMsg.text }}</span>
+            <label class="force-label">
+              <input type="checkbox" v-model="forceVerify" class="force-cb" />
+              <span>强制重验</span>
+            </label>
+            <button class="btn-verify" @click="triggerVerify" :disabled="verifying">
+              {{ verifying ? '验证中…' : '验证选定区间' }}
+            </button>
+          </div>
+        </div>
+        <div class="hd-row hd-row-filters">
+          <div class="date-range">
+            <input type="date" v-model="trackFrom" @change="load" class="date-in" />
+            <span class="date-sep">至</span>
+            <input type="date" v-model="trackTo"   @change="load" class="date-in" />
+          </div>
+          <select v-model="filterVerified" @change="load" class="filter-sel">
+            <option :value="null">全部状态</option>
+            <option :value="false">待验证</option>
+            <option :value="true">已验证</option>
+          </select>
+          <select v-model="filterOutcome" class="filter-sel">
+            <option value="">全部结果</option>
+            <option value="hit_target">达目标</option>
+            <option value="hit_stop">触止损</option>
+            <option value="positive">正收益</option>
+            <option value="negative">负收益</option>
+            <option value="open">进行中</option>
+          </select>
+          <div class="search-wrap">
+            <svg class="search-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input v-model="searchQuery" class="search-in" placeholder="股票名 / 代码" />
+            <button v-if="searchQuery" class="search-clear" @click="searchQuery = ''">×</button>
+          </div>
         </div>
       </div>
-      <!-- Row 2: filters -->
-      <div class="hd-row hd-row-filters">
-        <div class="date-range">
-          <input type="date" v-model="trackFrom" @change="load" class="date-in" />
-          <span class="date-sep">至</span>
-          <input type="date" v-model="trackTo"   @change="load" class="date-in" />
+
+      <div class="stats-section" v-if="predTotal > 0">
+        <div class="formula-row">
+          <div class="fm-item">
+            <span class="fm-val">{{ filteredPredictions.length }}</span>
+            <span class="fm-lbl">全部</span>
+          </div>
+          <span class="fm-eq">=</span>
+          <div class="fm-item fm-pending">
+            <span class="fm-val">{{ fPendingCount }}</span>
+            <span class="fm-lbl">待验证</span>
+          </div>
+          <span class="fm-op">+</span>
+          <div class="fm-item fm-profit">
+            <span class="fm-val">{{ fProfitCount }}</span>
+            <span class="fm-lbl">正收益</span>
+            <span class="fm-sub" v-if="fAvgPosPct != null">均+{{ fAvgPosPct }}%</span>
+          </div>
+          <span class="fm-op">+</span>
+          <div class="fm-item fm-loss">
+            <span class="fm-val">{{ fNegCount }}</span>
+            <span class="fm-lbl">负收益</span>
+            <span class="fm-sub" v-if="fAvgNegPct != null">均{{ fAvgNegPct }}%</span>
+          </div>
         </div>
-        <select v-model="filterVerified" @change="load" class="filter-sel">
-          <option :value="null">全部状态</option>
-          <option :value="false">待验证</option>
-          <option :value="true">已验证</option>
-        </select>
-        <select v-model="filterOutcome" class="filter-sel">
-          <option value="">全部结果</option>
-          <option value="hit_target">达目标</option>
-          <option value="hit_stop">触止损</option>
-          <option value="positive">正收益</option>
-          <option value="negative">负收益</option>
-          <option value="open">进行中</option>
-        </select>
-        <div class="search-wrap">
-          <svg class="search-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input v-model="searchQuery" class="search-in" placeholder="股票名 / 代码" />
-          <button v-if="searchQuery" class="search-clear" @click="searchQuery = ''">×</button>
+        <div class="formula-row">
+          <div class="fm-item fm-profit">
+            <span class="fm-val">{{ fProfitCount }}</span>
+            <span class="fm-lbl">正收益</span>
+          </div>
+          <span class="fm-eq">=</span>
+          <div class="fm-item fm-hit">
+            <span class="fm-val">{{ fHitTarget }}</span>
+            <span class="fm-lbl">达目标</span>
+          </div>
+          <span class="fm-op">+</span>
+          <div class="fm-item">
+            <span class="fm-val">{{ fProfitCount - fHitTarget }}</span>
+            <span class="fm-lbl">未达目标</span>
+          </div>
+          <div class="fm-divider"></div>
+          <div class="fm-item fm-loss">
+            <span class="fm-val">{{ fNegCount }}</span>
+            <span class="fm-lbl">负收益</span>
+          </div>
+          <span class="fm-eq">=</span>
+          <div class="fm-item fm-stp">
+            <span class="fm-val">{{ fHitStop }}</span>
+            <span class="fm-lbl">触止损</span>
+          </div>
+          <span class="fm-op">+</span>
+          <div class="fm-item">
+            <span class="fm-val">{{ fNegCount - fHitStop }}</span>
+            <span class="fm-lbl">未触止损</span>
+          </div>
+        </div>
+        <div class="formula-row">
+          <div class="fm-item fm-accent">
+            <span class="fm-val">{{ fAccuracy != null ? fAccuracy + '%' : '-' }}</span>
+            <span class="fm-lbl">方向准确率</span>
+          </div>
+          <div class="fm-item" :class="(fAvgChange||0) >= 0 ? 'fm-profit' : 'fm-loss'">
+            <span class="fm-val">{{ fAvgChange != null ? (fAvgChange > 0 ? '+' : '') + fAvgChange + '%' : '-' }}</span>
+            <span class="fm-lbl">平均涨跌</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="table-card card">
+        <div v-if="loading" class="tbl-loading">加载中…</div>
+        <table v-else-if="sortedPredictions.length" class="pred-tbl">
+          <thead>
+            <tr>
+              <th class="sortable" @click="toggleSort('date')">
+                日期 <span class="sort-icon">{{ sortIcon('date') }}</span>
+              </th>
+              <th>股票</th>
+              <th class="sortable" @click="toggleSort('buy_price')">
+                建议价 <span class="sort-icon">{{ sortIcon('buy_price') }}</span>
+              </th>
+              <th class="sortable" @click="toggleSort('entry_price')">
+                开盘价 <span class="sort-icon">{{ sortIcon('entry_price') }}</span>
+              </th>
+              <th>止损</th>
+              <th>目标</th>
+              <th class="sortable" @click="toggleSort('actual_close')">
+                现价 <span class="sort-icon">{{ sortIcon('actual_close') }}</span>
+              </th>
+              <th class="sortable" @click="toggleSort('change_pct')">
+                涨跌 <span class="sort-icon">{{ sortIcon('change_pct') }}</span>
+              </th>
+              <th class="sortable" @click="toggleSort('confidence')">
+                置信度 <span class="sort-icon">{{ sortIcon('confidence') }}</span>
+              </th>
+              <th>风险</th>
+              <th>结果</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="p in sortedPredictions" :key="p.id" class="pred-row" @click="openDetail(p)">
+              <td class="td-date">{{ p.date }}</td>
+              <td class="td-stock">
+                <b>{{ p.name }}</b>
+                <span class="td-code">{{ p.code }}</span>
+              </td>
+              <td class="td-mono td-dim">{{ p.buy_price ?? '-' }}</td>
+              <td class="td-mono">
+                <span v-if="p.entry_price" class="entry-price">{{ p.entry_price }}</span>
+                <span v-else class="td-dim">-</span>
+              </td>
+              <td class="td-stop">
+                {{ p.stop_price ?? '-' }}
+                <span v-if="p.stop_pct" class="pct-sub pct-loss">(-{{ p.stop_pct.toFixed(1) }}%)</span>
+              </td>
+              <td class="td-tgt">
+                {{ p.target_price ?? '-' }}
+                <span v-if="p.target_pct" class="pct-sub pct-profit">(+{{ p.target_pct.toFixed(1) }}%)</span>
+              </td>
+              <td class="td-mono">
+                <template v-if="p.actual_close">
+                  <span :class="(changePct(p) ?? 0) >= 0 ? 'td-up' : 'td-dn'">{{ p.actual_close }}</span>
+                </template>
+                <span v-else class="td-dim">-</span>
+              </td>
+              <td class="td-mono">
+                <template v-if="changePct(p) !== null">
+                  <span :class="['pct-chip', (changePct(p) ?? 0) >= 0 ? 'chip-up' : 'chip-dn']">
+                    {{ (changePct(p) ?? 0) >= 0 ? '+' : '' }}{{ changePct(p) }}%
+                  </span>
+                </template>
+                <span v-else class="td-dim">-</span>
+              </td>
+              <td>
+                <div class="conf-row">
+                  <div class="conf-bar"><div class="conf-fill" :style="{ width: (p.confidence||0)+'%' }"></div></div>
+                  <span class="conf-num">{{ p.confidence ?? '-' }}</span>
+                </div>
+              </td>
+              <td><span :class="['risk-badge', 'r-' + (p.risk_level||'中')]">{{ p.risk_level ?? '-' }}</span></td>
+              <td>
+                <span :class="['out-badge', 'o-' + (p.outcome||'open')]">{{ outLabel(p.outcome) }}</span>
+              </td>
+              <td class="td-action">
+                <span class="detail-link">详情 →</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <div v-else-if="predictions.length && !sortedPredictions.length" class="tbl-empty">
+          <p>没有匹配的记录</p>
+          <p class="sub">调整搜索条件或清除筛选</p>
+        </div>
+        <div v-else class="tbl-empty">
+          <p>暂无预测记录</p>
+          <p class="sub">AI 每日精选后自动生成预测记录</p>
         </div>
       </div>
     </div>
 
-    <!-- ── Stats bar ──────────────────────────────────────────────────── -->
-    <div class="stats-section" v-if="predTotal > 0">
-      <!-- Line 1: 总数 = 待验证 + 正收益 + 负收益 -->
-      <div class="formula-row">
-        <div class="fm-item">
-          <span class="fm-val">{{ filteredPredictions.length }}</span>
-          <span class="fm-lbl">全部</span>
-        </div>
-        <span class="fm-eq">=</span>
-        <div class="fm-item fm-pending">
-          <span class="fm-val">{{ fPendingCount }}</span>
-          <span class="fm-lbl">待验证</span>
-        </div>
-        <span class="fm-op">+</span>
-        <div class="fm-item fm-profit">
-          <span class="fm-val">{{ fProfitCount }}</span>
-          <span class="fm-lbl">正收益</span>
-          <span class="fm-sub" v-if="fAvgPosPct != null">均+{{ fAvgPosPct }}%</span>
-        </div>
-        <span class="fm-op">+</span>
-        <div class="fm-item fm-loss">
-          <span class="fm-val">{{ fNegCount }}</span>
-          <span class="fm-lbl">负收益</span>
-          <span class="fm-sub" v-if="fAvgNegPct != null">均{{ fAvgNegPct }}%</span>
+    <!-- ── Watchlist Tab ─────────────────────────────────────────────── -->
+    <div v-if="activeTab === 'watchlist'" class="tab-content">
+      <div class="vfy-header card">
+        <div class="hd-row hd-row-top">
+          <div class="hd-title">自选股验证</div>
+          <div class="hd-right">
+            <select v-model="watchlistPeriod" class="filter-sel">
+              <option :value="7">7 天</option>
+              <option :value="30">30 天</option>
+              <option :value="90">90 天</option>
+              <option :value="180">180 天</option>
+              <option :value="365">365 天</option>
+            </select>
+            <button class="btn-verify" @click="verifyWatchlist" :disabled="watchlistVerifying || watchlistStore.watchlist.length === 0">
+              {{ watchlistVerifying ? '验证中…' : '运行验证' }}
+            </button>
+          </div>
         </div>
       </div>
-      <!-- Line 2: 正收益 = 达目标 + 其他正  |  负收益 = 触止损 + 其他负 -->
-      <div class="formula-row">
-        <div class="fm-item fm-profit">
-          <span class="fm-val">{{ fProfitCount }}</span>
-          <span class="fm-lbl">正收益</span>
-        </div>
-        <span class="fm-eq">=</span>
-        <div class="fm-item fm-hit">
-          <span class="fm-val">{{ fHitTarget }}</span>
-          <span class="fm-lbl">达目标</span>
-        </div>
-        <span class="fm-op">+</span>
-        <div class="fm-item">
-          <span class="fm-val">{{ fProfitCount - fHitTarget }}</span>
-          <span class="fm-lbl">未达目标</span>
-        </div>
-        <div class="fm-divider"></div>
-        <div class="fm-item fm-loss">
-          <span class="fm-val">{{ fNegCount }}</span>
-          <span class="fm-lbl">负收益</span>
-        </div>
-        <span class="fm-eq">=</span>
-        <div class="fm-item fm-stp">
-          <span class="fm-val">{{ fHitStop }}</span>
-          <span class="fm-lbl">触止损</span>
-        </div>
-        <span class="fm-op">+</span>
-        <div class="fm-item">
-          <span class="fm-val">{{ fNegCount - fHitStop }}</span>
-          <span class="fm-lbl">未触止损</span>
-        </div>
-      </div>
-      <!-- Line 3: 准确率 + 平均涨跌 -->
-      <div class="formula-row">
-        <div class="fm-item fm-accent">
-          <span class="fm-val">{{ fAccuracy != null ? fAccuracy + '%' : '-' }}</span>
-          <span class="fm-lbl">方向准确率</span>
-        </div>
-        <div class="fm-item" :class="(fAvgChange||0) >= 0 ? 'fm-profit' : 'fm-loss'">
-          <span class="fm-val">{{ fAvgChange != null ? (fAvgChange > 0 ? '+' : '') + fAvgChange + '%' : '-' }}</span>
-          <span class="fm-lbl">平均涨跌</span>
-        </div>
-      </div>
-    </div>
 
-    <!-- ── Prediction table ──────────────────────────────────────────── -->
-    <div class="table-card card">
-      <div v-if="loading" class="tbl-loading">加载中…</div>
-      <table v-else-if="sortedPredictions.length" class="pred-tbl">
-        <thead>
-          <tr>
-            <th class="sortable" @click="toggleSort('date')">
-              日期 <span class="sort-icon">{{ sortIcon('date') }}</span>
-            </th>
-            <th>股票</th>
-            <th class="sortable" @click="toggleSort('buy_price')">
-              建议价 <span class="sort-icon">{{ sortIcon('buy_price') }}</span>
-            </th>
-            <th class="sortable" @click="toggleSort('entry_price')">
-              开盘价 <span class="sort-icon">{{ sortIcon('entry_price') }}</span>
-            </th>
-            <th>止损</th>
-            <th>目标</th>
-            <th class="sortable" @click="toggleSort('actual_close')">
-              现价 <span class="sort-icon">{{ sortIcon('actual_close') }}</span>
-            </th>
-            <th class="sortable" @click="toggleSort('change_pct')">
-              涨跌 <span class="sort-icon">{{ sortIcon('change_pct') }}</span>
-            </th>
-            <th class="sortable" @click="toggleSort('confidence')">
-              置信度 <span class="sort-icon">{{ sortIcon('confidence') }}</span>
-            </th>
-            <th>风险</th>
-            <th>结果</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="p in sortedPredictions" :key="p.id" class="pred-row" @click="openDetail(p)">
-            <td class="td-date">{{ p.date }}</td>
-            <td class="td-stock">
-              <b>{{ p.name }}</b>
-              <span class="td-code">{{ p.code }}</span>
-            </td>
-            <!-- AI建议价 -->
-            <td class="td-mono td-dim">{{ p.buy_price ?? '-' }}</td>
-            <!-- 当日实际开盘价（成本基准） -->
-            <td class="td-mono">
-              <span v-if="p.entry_price" class="entry-price">{{ p.entry_price }}</span>
-              <span v-else class="td-dim">-</span>
-            </td>
-            <td class="td-stop">
-              {{ p.stop_price ?? '-' }}
-              <span v-if="p.stop_pct" class="pct-sub pct-loss">(-{{ p.stop_pct.toFixed(1) }}%)</span>
-            </td>
-            <td class="td-tgt">
-              {{ p.target_price ?? '-' }}
-              <span v-if="p.target_pct" class="pct-sub pct-profit">(+{{ p.target_pct.toFixed(1) }}%)</span>
-            </td>
-            <!-- 现价 -->
-            <td class="td-mono">
-              <template v-if="p.actual_close">
-                <span :class="(changePct(p) ?? 0) >= 0 ? 'td-up' : 'td-dn'">{{ p.actual_close }}</span>
-              </template>
-              <span v-else class="td-dim">-</span>
-            </td>
-            <!-- 涨跌幅 -->
-            <td class="td-mono">
-              <template v-if="changePct(p) !== null">
-                <span :class="['pct-chip', (changePct(p) ?? 0) >= 0 ? 'chip-up' : 'chip-dn']">
-                  {{ (changePct(p) ?? 0) >= 0 ? '+' : '' }}{{ changePct(p) }}%
-                </span>
-              </template>
-              <span v-else class="td-dim">-</span>
-            </td>
-            <td>
-              <div class="conf-row">
-                <div class="conf-bar"><div class="conf-fill" :style="{ width: (p.confidence||0)+'%' }"></div></div>
-                <span class="conf-num">{{ p.confidence ?? '-' }}</span>
+      <div v-if="watchlistStore.watchlist.length === 0" class="empty-state">
+        <div class="empty-icon">
+          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path>
+          </svg>
+        </div>
+        <h3>还没有自选股</h3>
+        <p>先去添加一些股票到自选股</p>
+        <button class="btn-verify" @click="goToWatchlist">去添加</button>
+      </div>
+
+      <div v-else class="results-section">
+        <div v-if="watchlistStore.watchlistVerifications.length > 0" class="result-card">
+          <div class="result-header">
+            <div>
+              <h3>最近验证</h3>
+              <p class="result-meta">{{ formatDate(watchlistStore.watchlistVerifications[0].createdAt) }}</p>
+            </div>
+            <div class="total-return">
+              <span class="return-label">平均收益</span>
+              <span class="return-value" :class="getReturnClass(watchlistStore.watchlistVerifications[0].totalReturn)">
+                {{ watchlistStore.watchlistVerifications[0].totalReturn }}%
+              </span>
+            </div>
+          </div>
+          <div class="result-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>股票</th>
+                  <th>期初价</th>
+                  <th>期末价</th>
+                  <th>涨跌</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="item in watchlistStore.watchlistVerifications[0].results" :key="item.code">
+                  <td>
+                    <span class="stock-code">{{ item.code }}</span>
+                    <span class="stock-name">{{ item.name }}</span>
+                  </td>
+                  <td>{{ item.startPrice.toFixed(2) }}</td>
+                  <td>{{ item.endPrice.toFixed(2) }}</td>
+                  <td>
+                    <span class="change-value" :class="getReturnClass(item.changePercent)">
+                      {{ item.changePercent > 0 ? '+' : '' }}{{ item.changePercent }}%
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div v-if="watchlistStore.watchlistVerifications.length > 1" class="history-section">
+          <h3 class="section-title">历史验证</h3>
+          <div class="history-list">
+            <div 
+              v-for="verification in watchlistStore.watchlistVerifications.slice(1)" 
+              :key="verification.id" 
+              class="history-item"
+            >
+              <div class="history-info">
+                <span class="history-date">{{ formatDate(verification.createdAt) }}</span>
+                <span class="history-period">{{ verification.periodDays }} 天</span>
               </div>
-            </td>
-            <td><span :class="['risk-badge', 'r-' + (p.risk_level||'中')]">{{ p.risk_level ?? '-' }}</span></td>
-            <td>
-              <span :class="['out-badge', 'o-' + (p.outcome||'open')]">{{ outLabel(p.outcome) }}</span>
-            </td>
-            <td class="td-action">
-              <span class="detail-link">详情 →</span>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-      <div v-else-if="predictions.length && !sortedPredictions.length" class="tbl-empty">
-        <p>没有匹配的记录</p>
-        <p class="sub">调整搜索条件或清除筛选</p>
-      </div>
-      <div v-else class="tbl-empty">
-        <p>暂无预测记录</p>
-        <p class="sub">AI 每日精选后自动生成预测记录</p>
+              <div class="history-return">
+                <span class="return-label">平均收益</span>
+                <span class="return-value" :class="getReturnClass(verification.totalReturn)">
+                  {{ verification.totalReturn }}%
+                </span>
+              </div>
+              <button class="btn-remove" @click="removeVerification(verification.id)" title="删除">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -219,10 +333,15 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
+import { useWatchlistStore } from '../stores/watchlist'
 
 const router = useRouter()
+const watchlistStore = useWatchlistStore()
 
-// ── State ─────────────────────────────────────────────────────────────────────
+// Tab state
+const activeTab = ref('ai')
+
+// ── AI Picks State ─────────────────────────────────────────────────────────────
 const predictions    = ref([])
 const stats          = ref({})
 const predTotal      = ref(0)
@@ -236,12 +355,12 @@ const searchQuery    = ref('')
 
 const today     = new Date()
 const thirtyAgo = new Date(today); thirtyAgo.setDate(thirtyAgo.getDate() - 30)
+const future    = new Date(today); future.setDate(future.getDate() + 30)
 const trackFrom = ref(thirtyAgo.toISOString().slice(0, 10))
-const trackTo   = ref(today.toISOString().slice(0, 10))
+const trackTo   = ref(future.toISOString().slice(0, 10))
 
-// ── Sorting ──────────────────────────────────────────────────────────────────
 const sortKey = ref('date')
-const sortDir = ref('desc')  // 'asc' | 'desc'
+const sortDir = ref('desc')
 
 function toggleSort(key) {
   if (sortKey.value === key) {
@@ -257,7 +376,6 @@ function sortIcon(key) {
   return sortDir.value === 'asc' ? '↑' : '↓'
 }
 
-// ── Load predictions ──────────────────────────────────────────────────────────
 async function load() {
   loading.value = true
   try {
@@ -292,8 +410,6 @@ async function triggerVerify() {
   }
 }
 
-// ── Filtering ──────────────────────────────────────────────────────────────────
-
 const filteredPredictions = computed(() => {
   let list = predictions.value
   if (filterOutcome.value) {
@@ -313,10 +429,8 @@ const filteredPredictions = computed(() => {
   return list
 })
 
-// Numeric sort keys — compare as numbers, not strings
 const numericKeys = new Set(['buy_price', 'entry_price', 'actual_close', 'confidence', 'change_pct'])
 
-// Sorted predictions (after filtering)
 const sortedPredictions = computed(() => {
   const list = [...filteredPredictions.value]
   const key = sortKey.value
@@ -339,20 +453,12 @@ const sortedPredictions = computed(() => {
     if (va > vb) return 1 * dir
     return 0
   })
-
   return list
 })
 
-// ── Stats (computed from filteredPredictions) ────────────────────────────────
-// 待验证 = 未验证
 const fPendingCount = computed(() => filteredPredictions.value.filter(p => !p.verified).length)
-// 进行中 = 已验证，但未达目标也未触止损（outcome: positive/negative/neutral）
 const fOpenCount = computed(() => filteredPredictions.value.filter(p => p.verified && !['hit_target', 'hit_stop'].includes(p.outcome)).length)
-// 已完结 = 达目标 + 触止损
-const fDoneCount   = computed(() => filteredPredictions.value.filter(p => p.outcome === 'hit_target' || p.outcome === 'hit_stop').length)
-// 正收益 = hit_target + positive + neutral(持平归入正)
 const fProfitCount = computed(() => filteredPredictions.value.filter(p => ['hit_target', 'positive', 'neutral'].includes(p.outcome)).length)
-// 负收益 = hit_stop + negative
 const fNegCount    = computed(() => filteredPredictions.value.filter(p => ['hit_stop', 'negative'].includes(p.outcome)).length)
 const fHitTarget   = computed(() => filteredPredictions.value.filter(p => p.outcome === 'hit_target').length)
 const fHitStop     = computed(() => filteredPredictions.value.filter(p => p.outcome === 'hit_stop').length)
@@ -388,13 +494,11 @@ const fAvgNegPct = computed(() => {
   return (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(2)
 })
 
-// ── Navigate to detail page ───────────────────────────────────────────────────
 function openDetail(p) {
   sessionStorage.setItem('verifyPred', JSON.stringify(p))
   router.push('/verify-detail')
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
 function outLabel(o) {
   return { hit_target:'达目标', hit_stop:'触止损', positive:'正收益', negative:'负收益', neutral:'持平', open:'待验证' }[o] || '待验证'
 }
@@ -405,11 +509,97 @@ function changePct(p) {
   return ((p.actual_close - basis) / basis * 100).toFixed(1)
 }
 
+// ── Watchlist Verification State ──────────────────────────────────────────────
+const watchlistPeriod = ref(30)
+const watchlistVerifying = ref(false)
+
+async function verifyWatchlist() {
+  if (watchlistVerifying.value || watchlistStore.watchlist.length === 0) return
+  watchlistVerifying.value = true
+  try {
+    await watchlistStore.verifyWatchlist(watchlistPeriod.value)
+  } catch (e) {
+    console.error('Watchlist verification failed:', e)
+    alert('验证失败，请稍后重试')
+  } finally {
+    watchlistVerifying.value = false
+  }
+}
+
+function removeVerification(id) {
+  if (confirm('确定要删除这条验证记录吗？')) {
+    watchlistStore.removeVerification(id)
+  }
+}
+
+function goToWatchlist() {
+  router.push('/watchlist')
+}
+
+function formatDate(dateStr) {
+  const date = new Date(dateStr)
+  return date.toLocaleDateString('zh-CN', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
+function getReturnClass(value) {
+  const num = parseFloat(value)
+  if (num > 0) return 'positive'
+  if (num < 0) return 'negative'
+  return 'neutral'
+}
+
 onMounted(() => { load() })
 </script>
 
 <style scoped>
 .vfy-wrap { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+
+/* Tabs */
+.tabs-container {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+  background: var(--bg-surface);
+  padding: 4px;
+  border-radius: 8px;
+  width: fit-content;
+}
+
+.tab-btn {
+  padding: 10px 20px;
+  border: none;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.tab-btn:hover {
+  background: var(--bg-hover);
+}
+
+.tab-btn.active {
+  background: var(--accent);
+  color: white;
+}
+
+.tab-content {
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 
 /* Header */
 .vfy-header { padding: 10px 14px 8px; display: flex; flex-direction: column; gap: 8px; }
@@ -467,7 +657,6 @@ onMounted(() => { load() })
 .pred-row { cursor: pointer; transition: background 0.1s; }
 .pred-row:hover { background: var(--bg-hover); }
 
-/* Sortable headers */
 .sortable { cursor: pointer; user-select: none; transition: color 0.12s; }
 .sortable:hover { color: var(--accent); }
 .sort-icon { font-size: 10px; opacity: 0.6; margin-left: 2px; }
@@ -476,7 +665,6 @@ onMounted(() => { load() })
 .td-stock b { font-weight: 700; }
 .td-code { font-size: 11px; color: var(--text-3); margin-left: 5px; font-family: var(--font-mono); }
 .td-mono { font-family: var(--font-mono); }
-/* A-share: red=涨, green=跌 */
 .td-stop { color: #22c55e; font-family: var(--font-mono); white-space: nowrap; }
 .td-tgt  { color: #ef4444; font-family: var(--font-mono); white-space: nowrap; }
 .td-up { color: #ef4444; font-weight: 600; font-family: var(--font-mono); }
@@ -488,7 +676,6 @@ onMounted(() => { load() })
 
 .entry-price { color: var(--cyan); font-family: var(--font-mono); font-weight: 600; }
 
-/* Search bar */
 .search-wrap {
   position: relative; display: flex; align-items: center;
   background: var(--bg-elevated); border: 1px solid var(--border);
@@ -539,6 +726,225 @@ onMounted(() => { load() })
   opacity: 0.7; white-space: nowrap; transition: opacity 0.12s;
 }
 .pred-row:hover .detail-link { opacity: 1; }
+
+/* Watchlist Tab Styles */
+.empty-state {
+  text-align: center;
+  padding: 60px 24px;
+  background: var(--bg-surface);
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+}
+
+.empty-icon {
+  color: var(--text-4);
+  margin-bottom: 16px;
+}
+
+.empty-state h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-2);
+  margin: 0 0 8px;
+}
+
+.empty-state p {
+  font-size: 13px;
+  color: var(--text-3);
+  margin: 0 0 16px;
+}
+
+.results-section {
+  margin-top: 16px;
+}
+
+.result-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+
+.result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(135deg, rgba(61,142,248,0.04), transparent);
+}
+
+.result-header h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-1);
+  margin: 0 0 4px;
+}
+
+.result-meta {
+  font-size: 12px;
+  color: var(--text-3);
+  margin: 0;
+}
+
+.total-return {
+  text-align: right;
+}
+
+.return-label {
+  display: block;
+  font-size: 10px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+
+.return-value {
+  font-size: 24px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+}
+
+.return-value.positive {
+  color: var(--success);
+}
+
+.return-value.negative {
+  color: var(--danger);
+}
+
+.return-value.neutral {
+  color: var(--text-2);
+}
+
+.result-table {
+  padding: 0 20px 20px;
+}
+
+.result-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.result-table thead {
+  background: var(--bg-base);
+}
+
+.result-table th {
+  padding: 12px 14px;
+  text-align: left;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--border);
+}
+
+.result-table td {
+  padding: 12px 14px;
+  font-size: 13px;
+  border-bottom: 1px solid var(--border);
+}
+
+.result-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.stock-code {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--text-1);
+  margin-right: 8px;
+}
+
+.stock-name {
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.change-value {
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+.change-value.positive {
+  color: var(--success);
+}
+
+.change-value.negative {
+  color: var(--danger);
+}
+
+.history-section {
+  margin-top: 24px;
+}
+
+.section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-2);
+  margin: 0 0 12px;
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.history-info {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.history-date {
+  font-size: 13px;
+  color: var(--text-2);
+  font-weight: 500;
+}
+
+.history-period {
+  font-size: 12px;
+  color: var(--text-3);
+  background: var(--bg-base);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.history-return {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.btn-remove {
+  background: none;
+  border: none;
+  color: var(--text-3);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.15s;
+}
+
+.btn-remove:hover {
+  color: var(--danger);
+  background: rgba(239, 68, 68, 0.1);
+}
 
 @media (max-width: 600px) {
   .vfy-wrap { padding: 12px; }

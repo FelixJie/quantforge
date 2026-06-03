@@ -1,4 +1,4 @@
-"""Unified AI client — OpenAI-compatible, backed by ByteDance ARK.
+"""Unified AI client — supports OpenAI-compatible and Anthropic protocols.
 
 Configure via (priority order):
   1. data/cache/llm_config.json  — runtime config saved via /api/llm-stats/config
@@ -16,9 +16,9 @@ import os
 import datetime as _dt
 from pathlib import Path
 
-_DEFAULT_BASE_URL = "https://ark.cn-beijing.volces.com/api/coding/v3"
-_DEFAULT_API_KEY  = "0b06d2ae-7a7a-45a2-acf6-1c16c3f3c55c"
-_DEFAULT_MODEL    = "Doubao-Seed-2.0-Code"
+_DEFAULT_BASE_URL = "https://api.minimaxi.com/anthropic"
+_DEFAULT_API_KEY  = "sk-cp-0JaSCTxL9E8fP1TzVFwAg7OZ2L56y9tBEuYwkDsndvVzj38JrMl0OEE2FAnWARKaz03qlUoPoTr81cyYt55vx67EXY5CoVfJS32TtWchTRGiR7bOCdlmlLc"
+_DEFAULT_MODEL    = "MiniMax-M2.7"
 
 _COST_FILE   = Path("data/cache/llm_costs.json")
 _CONFIG_FILE = Path("data/cache/llm_config.json")
@@ -74,10 +74,20 @@ def get_config() -> dict:
     }
 
 
+def _is_anthropic() -> bool:
+    """Check if current base_url uses Anthropic protocol."""
+    url = get_base_url()
+    return url.endswith("/anthropic") or "anthropic" in url.lower()
+
+
 def build_client():
-    """Return a configured OpenAI-compatible client."""
-    from openai import OpenAI
-    return OpenAI(api_key=get_api_key(), base_url=get_base_url())
+    """Return a configured client based on the protocol."""
+    if _is_anthropic():
+        from anthropic import Anthropic
+        return Anthropic(api_key=get_api_key(), base_url=get_base_url())
+    else:
+        from openai import OpenAI
+        return OpenAI(api_key=get_api_key(), base_url=get_base_url())
 
 
 # ── Cost tracking ──────────────────────────────────────────────────────────────
@@ -167,38 +177,57 @@ async def chat(
     model = get_model()
 
     def _call():
-        # Build user message content
-        if images:
-            content = [{"type": "text", "text": user}]
-            for img_b64 in images:
-                content.append({
-                    "type": "image_url",
-                    "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"},
-                })
+        if _is_anthropic():
+            resp = client.messages.create(
+                model=model,
+                max_tokens=max_tokens,
+                system=system,
+                messages=[
+                    {"role": "user", "content": user},
+                ],
+            )
+            return resp
         else:
-            content = user
+            if images:
+                content = [{"type": "text", "text": user}]
+                for img_b64 in images:
+                    content.append({
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"},
+                    })
+            else:
+                content = user
 
-        resp = client.chat.completions.create(
-            model=model,
-            max_tokens=max_tokens,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user",   "content": content},
-            ],
-        )
-        return resp
+            resp = client.chat.completions.create(
+                model=model,
+                max_tokens=max_tokens,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user",   "content": content},
+                ],
+            )
+            return resp
 
     resp = await asyncio.to_thread(_call)
-    text = resp.choices[0].message.content or ""
+    
+    if _is_anthropic():
+        text = ""
+        for block in resp.content:
+            if hasattr(block, 'text'):
+                text += block.text
+        input_tokens = resp.usage.input_tokens
+        output_tokens = resp.usage.output_tokens
+    else:
+        text = resp.choices[0].message.content or ""
+        usage = getattr(resp, "usage", None)
+        input_tokens = getattr(usage, "prompt_tokens", 0)
+        output_tokens = getattr(usage, "completion_tokens", 0)
 
-    # Record cost
-    usage = getattr(resp, "usage", None)
-    if usage:
-        _record_cost(
-            caller=caller,
-            model=model,
-            input_tokens=getattr(usage, "prompt_tokens", 0),
-            output_tokens=getattr(usage, "completion_tokens", 0),
-        )
+    _record_cost(
+        caller=caller,
+        model=model,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+    )
 
     return text

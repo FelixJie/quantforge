@@ -28,6 +28,7 @@ _CACHE_DIR = Path("data/cache/sector")
 _TTL_BOARDS = 15 * 60   # 15 minutes for board lists
 _TTL_STOCKS = 10 * 60   # 10 minutes for constituent stocks
 _TTL_FLOW   = 10 * 60   # 10 minutes for fund flow
+_TTL_PE     = 20 * 60   # 20 minutes for industry summary
 
 
 # ── Cache helpers ─────────────────────────────────────────────────────────────
@@ -289,3 +290,92 @@ async def get_fund_flow(indicator: str = Query("今日", enum=["今日", "5日",
         if stale:
             return stale
         raise HTTPException(status_code=503, detail=f"资金流向数据获取失败（非交易时间可能无数据）: {e}")
+
+
+# ── Industry summary endpoint ─────────────────────────────────────────────────
+
+async def _get_industry_stocks_cached(name: str) -> list[dict]:
+    ck = f"industry_cons_{name}"
+    cached = _load_cache(ck, _TTL_STOCKS)
+    if cached:
+        return cached.get("stocks", [])
+    import akshare as ak
+    df = await asyncio.to_thread(ak.stock_board_industry_cons_em, name)
+    stocks = _normalise_cons(df)
+    stocks.sort(key=lambda x: x.get("change_pct") or 0, reverse=True)
+    _save_cache(ck, {"board": name, "stocks": stocks, "count": len(stocks)})
+    return stocks
+
+
+def _summarise_industry_board(board: dict, stocks: list[dict]) -> dict:
+    """Merge board-level stats with aggregated constituent valuations."""
+    pe_vals = sorted(s["pe"] for s in stocks
+                     if s.get("pe") is not None and 0 < s["pe"] < 1000)
+    pb_vals = [s["pb"] for s in stocks if s.get("pb") is not None and s["pb"] > 0]
+    amount  = sum(s["turnover"] for s in stocks if s.get("turnover"))
+
+    n = len(pe_vals)
+    median_pe = None
+    avg_pe = None
+    if n:
+        median_pe = round(pe_vals[n // 2] if n % 2 else (pe_vals[n // 2 - 1] + pe_vals[n // 2]) / 2, 2)
+        avg_pe = round(sum(pe_vals) / n, 2)
+
+    return {
+        **board,   # name, change_pct, market_cap, turnover_rate, up_count, down_count, leader, leader_change
+        "total":     len(stocks),
+        "avg_pe":    avg_pe,
+        "median_pe": median_pe,
+        "pe_valid":  n,
+        "avg_pb":    round(sum(pb_vals) / len(pb_vals), 2) if pb_vals else None,
+        "amount":    round(amount, 2) if amount else None,
+    }
+
+
+@router.get("/industry-summary")
+async def industry_summary():
+    """All industry boards with aggregated constituent valuations (PE/PB/成交额)."""
+    ck = "industry_summary"
+    cached = _load_cache(ck, _TTL_PE)
+    if cached:
+        return cached
+
+    live = True
+    try:
+        import akshare as ak
+        df = await asyncio.to_thread(ak.stock_board_industry_name_em)
+        boards = _normalise_boards(df)
+    except Exception as e:
+        # Data source unreachable — fall back to whatever is cached so the
+        # board list still renders (valuations filled from per-board caches).
+        logger.warning(f"Industry summary board list fetch failed, using cache: {e}")
+        live = False
+        stale_summary = _load_stale(ck)
+        if stale_summary:
+            return stale_summary
+        stale_boards = _load_stale("industry_boards")
+        if not stale_boards or not stale_boards.get("boards"):
+            raise HTTPException(status_code=503, detail=f"行业板块数据获取失败（数据源不可达）: {e}")
+        boards = stale_boards["boards"]
+
+    sem = asyncio.Semaphore(8)
+
+    async def enrich(board: dict) -> dict:
+        async with sem:
+            try:
+                if live:
+                    stocks = await _get_industry_stocks_cached(board["name"])
+                else:
+                    # Offline: only use already-cached constituents, no network.
+                    cached = _load_stale(f"industry_cons_{board['name']}")
+                    stocks = cached.get("stocks", []) if cached else []
+            except Exception as e:
+                logger.debug(f"Industry summary cons fetch failed for {board['name']}: {e}")
+                stocks = []
+        return _summarise_industry_board(board, stocks)
+
+    enriched = await asyncio.gather(*[enrich(b) for b in boards])
+    result = {"boards": enriched, "count": len(enriched), "type": "industry", "live": live}
+    if live:
+        _save_cache(ck, result)
+    return result

@@ -76,6 +76,30 @@
             <span class="market-label">{{ isMarketOpen ? 'A股 开盘中' : 'A股 休市' }}</span>
           </div>
           <div class="topbar-time">{{ currentTime }}</div>
+          <div class="user-menu" @click="toggleUserMenu" ref="userMenuRef">
+            <div class="user-avatar">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+              </svg>
+            </div>
+            <span class="user-name">{{ authStore.user?.username || '用户' }}</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+            <div v-if="showUserMenu" class="user-dropdown">
+              <div class="user-dropdown-header">
+                <div class="user-dropdown-username">{{ authStore.user?.username }}</div>
+                <div class="user-dropdown-email">{{ authStore.user?.email }}</div>
+              </div>
+              <div class="user-dropdown-divider"></div>
+              <button class="user-dropdown-item logout" @click="handleLogout">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+                </svg>
+                退出登录
+              </button>
+            </div>
+          </div>
         </div>
       </header>
 
@@ -102,17 +126,45 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { ref, computed, onMounted, onUnmounted, watch, onBeforeUnmount } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
+import { useAuthStore } from './stores/auth'
 
 const route = useRoute()
+const router = useRouter()
+const authStore = useAuthStore()
 const apiStatus = ref('checking')
 const currentTime = ref('')
 const sidebarOpen = ref(false)
 const sidebarCollapsed = ref(localStorage.getItem('sidebar-collapsed') === 'true')
+const showUserMenu = ref(false)
+const userMenuRef = ref(null)
 watch(sidebarCollapsed, v => localStorage.setItem('sidebar-collapsed', String(v)))
 let clockTimer = null
+
+function toggleUserMenu() {
+  showUserMenu.value = !showUserMenu.value
+}
+
+function handleClickOutside(event) {
+  if (userMenuRef.value && !userMenuRef.value.contains(event.target)) {
+    showUserMenu.value = false
+  }
+}
+
+function handleLogout() {
+  authStore.logout()
+  router.push('/auth')
+}
+
+onMounted(() => {
+  document.addEventListener('click', handleClickOutside)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', handleClickOutside)
+})
 
 // SVG icon paths (Lucide-style, inline)
 const icons = {
@@ -131,6 +183,11 @@ const icons = {
   coins: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/></svg>`,
   user: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,
   trending: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>`,
+  star: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>`,
+  verify2: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c.5 2.5 2.5 4.5 5 5-2.5.5-4.5 2.5-5 5-.5-2.5-2.5-4.5-5-5 2.5-.5 4.5-2.5 5-5z"/><path d="M9 9l6 6"/><path d="M15 9l-6 6"/></svg>`,
+  fileText: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></svg>`,
+  wallet: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2"/><line x1="3" x2="21" y1="10" y2="10"/></svg>`,
+  activity: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>`,
 }
 
 // ── Navigation — 7-pillar structure (based on industry research) ──────
@@ -148,6 +205,10 @@ const navGroups = [
       { path: '/stock-analysis', label: '个股分析', svg: icons.search },
       { path: '/sector',         label: '行业板块', svg: icons.layers },
       { path: '/news',           label: '财经资讯', svg: icons.newspaper },
+      { path: '/industry-research', label: '产业链投研', svg: icons.sparkles },
+      { path: '/research',       label: '研报估值', svg: icons.fileText },
+      { path: '/capital',        label: '资金筹码', svg: icons.wallet },
+      { path: '/signal',         label: '信号龙虎', svg: icons.activity },
     ],
   },
   {
@@ -156,6 +217,8 @@ const navGroups = [
       { path: '/ai-picks', label: 'AI 推荐', svg: icons.sparkles },
       { path: '/screener', label: '策略选股', svg: icons.bot },
       { path: '/verify',   label: '推荐验证', svg: icons.checkmark },
+      { path: '/watchlist', label: '自选股管理', svg: icons.star },
+      { path: '/watchlist-verify', label: '自选股验证', svg: icons.verify2 },
     ],
   },
   {
@@ -192,7 +255,7 @@ const allNavItems = navGroups.flatMap(g => g.items)
 const bottomNavItems = [
   { path: '/',         label: '首页',  svg: icons.dashboard, exact: true },
   { path: '/market-hub', label: '市场', svg: icons.chart },
-  { path: '/ai-picks', label: 'AI选股', svg: icons.sparkles },
+  { path: '/watchlist', label: '自选',  svg: icons.star },
   { path: '/backtest', label: '回测',  svg: icons.flask },
   { path: '/account',  label: '账户',  svg: icons.user },
 ]
@@ -434,6 +497,89 @@ onUnmounted(() => clearInterval(clockTimer))
   letter-spacing: 0.06em;
 }
 
+/* User menu */
+.user-menu {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  position: relative;
+  transition: background var(--trans-fast);
+  color: var(--text-2);
+}
+.user-menu:hover {
+  background: var(--bg-hover);
+  color: var(--text-1);
+}
+.user-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(59, 130, 246, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.user-name {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.user-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 220px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+  overflow: hidden;
+}
+.user-dropdown-header {
+  padding: 16px;
+  background: rgba(59, 130, 246, 0.05);
+}
+.user-dropdown-username {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-1);
+}
+.user-dropdown-email {
+  font-size: 12px;
+  color: var(--text-3);
+  margin-top: 2px;
+}
+.user-dropdown-divider {
+  height: 1px;
+  background: var(--border);
+}
+.user-dropdown-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  font-size: 13px;
+  color: var(--text-2);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: all var(--trans-fast);
+  text-align: left;
+}
+.user-dropdown-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-1);
+}
+.user-dropdown-item.logout:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
 /* Page content */
 .page-content {
   flex: 1;
@@ -483,6 +629,7 @@ onUnmounted(() => clearInterval(clockTimer))
   .topbar-time { display: none; }
   .market-label { display: none; }
   .market-status { padding: 3px 6px; }
+  .user-name { display: none; }
 
   /* Page content: leave room for bottom nav */
   .page-content {

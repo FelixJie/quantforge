@@ -29,6 +29,11 @@ api = [
     "anthropic>=0.25",
     "openai>=1.0",
     "python-multipart>=0.0.9",
+    "bcrypt>=4.0",
+    "python-jose[cryptography]>=3.3",
+    "mootdx>=0.10",
+    "requests>=2.30",
+    "stockstats>=0.6",
 ]
 dev = [
     "pytest>=7.4",

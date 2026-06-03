@@ -113,6 +113,9 @@
                 <div class="nc-tags">
                   <span class="nc-type" :class="item.type">{{ typeLabel(item.type) }}</span>
                   <span class="nc-category">{{ item.category }}</span>
+                  <span class="nc-source-tag" :class="getSourceClass(item.source)">
+                    {{ item.source }}
+                  </span>
                   <span v-for="s in item.stocks?.slice(0,2)" :key="s.code" class="nc-stock">
                     {{ s.code }}{{ s.name ? ' ' + s.name : '' }}
                   </span>
@@ -436,6 +439,16 @@ function typeLabel(type) {
   return { flash: '快讯', announcement: '公告', news: '新闻' }[type] || type
 }
 
+function getSourceClass(source) {
+  if (!source) return ''
+  if (source.includes('财联社')) return 'source-cls'
+  if (source.includes('个股新闻')) return 'source-stock'
+  if (source.includes('东财全球')) return 'source-global'
+  if (source.includes('上市公司')) return 'source-ann'
+  if (source.includes('同花顺')) return 'source-ths'
+  return 'source-default'
+}
+
 // ── Timers ────────────────────────────────────────────────────────────
 function startTimers() {
   refreshTimer = setInterval(refresh, REFRESH_SEC * 1000)
@@ -667,6 +680,51 @@ watch(activeTab, () => { pageSize.value = 30 })
 .nc-stock {
   font-size: 10px; color: var(--accent); background: var(--accent-dim);
   padding: 1px 6px; border-radius: 4px; font-family: var(--font-mono);
+}
+
+/* 来源标签样式 */
+.nc-source-tag {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid;
+}
+
+.nc-source-tag.source-cls {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.nc-source-tag.source-stock {
+  background: rgba(34, 197, 94, 0.12);
+  color: #22c55e;
+  border-color: rgba(34, 197, 94, 0.3);
+}
+
+.nc-source-tag.source-global {
+  background: rgba(59, 130, 246, 0.12);
+  color: #3b82f6;
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+.nc-source-tag.source-ann {
+  background: rgba(245, 158, 11, 0.12);
+  color: #f59e0b;
+  border-color: rgba(245, 158, 11, 0.3);
+}
+
+.nc-source-tag.source-ths {
+  background: rgba(139, 92, 246, 0.12);
+  color: #8b5cf6;
+  border-color: rgba(139, 92, 246, 0.3);
+}
+
+.nc-source-tag.source-default {
+  background: var(--bg-elevated);
+  color: var(--text-3);
+  border-color: var(--border-light);
 }
 
 .nc-title {

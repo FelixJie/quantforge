@@ -98,16 +98,44 @@ async def refresh(force: bool = False):
         from quantforge.data.feed.efinance_feed import detect_exchange
 
         df = await asyncio.to_thread(ef.stock.get_realtime_quotes)
-        # columns positional: 0=name, 1=code
+        # columns positional: 0=name, 1=code, 2=涨跌幅, 3=最新价, etc.
         new_store: dict[str, dict] = {}
         for _, row in df.iterrows():
-            code = str(row.iloc[1]).strip()
-            name = str(row.iloc[0]).strip()
-            if code and name:
-                new_store[code] = {
-                    "name": name,
-                    "exchange": detect_exchange(code).value,
-                }
+            try:
+                code = str(row.iloc[1]).strip() if len(row) > 1 else ""
+                name = str(row.iloc[0]).strip() if len(row) > 0 else ""
+                
+                price = None
+                change_pct = None
+                change_val = None
+                
+                # Try to extract price and change info
+                if len(row) > 3:
+                    try:
+                        price_val = row.iloc[3]
+                        if price_val not in (None, "-", ""):
+                            price = float(price_val)
+                    except (ValueError, TypeError, IndexError):
+                        pass
+                
+                if len(row) > 2:
+                    try:
+                        pct_val = row.iloc[2]
+                        if pct_val not in (None, "-", ""):
+                            change_pct = float(pct_val)
+                    except (ValueError, TypeError, IndexError):
+                        pass
+                
+                if code and name:
+                    new_store[code] = {
+                        "name": name,
+                        "exchange": detect_exchange(code).value,
+                        "price": price,
+                        "change_pct": change_pct,
+                        "change": change_val,
+                    }
+            except Exception:
+                continue
 
         _store = new_store
         _loaded_at = datetime.now()
@@ -118,3 +146,62 @@ async def refresh(force: bool = False):
         # Fall back to stale disk cache if available
         if not _store:
             _load_from_file()
+
+
+def get_stock_info(code: str) -> dict | None:
+    """Return full stock info dict for code, or None if not found."""
+    return _store.get(code)
+
+
+def get_stocks_by_filter(filter_func=None, limit: int = None) -> list[dict]:
+    """Return list of stocks matching filter function.
+    
+    Args:
+        filter_func: Function that takes (code, info) and returns bool
+        limit: Maximum number of results to return
+    """
+    results = []
+    for code, info in _store.items():
+        if filter_func is None or filter_func(code, info):
+            results.append({
+                "code": code,
+                "name": info.get("name", ""),
+                "exchange": info.get("exchange", ""),
+                "price": info.get("price"),
+                "change_pct": info.get("change_pct"),
+                "change": info.get("change"),
+            })
+    
+    if limit:
+        results = results[:limit]
+    
+    return results
+
+
+def search_stocks(query: str, limit: int = 50) -> list[dict]:
+    """Search stocks by code or name (case-insensitive).
+    
+    Returns list of matching stocks with basic info.
+    """
+    query_lower = query.lower()
+    results = []
+    
+    for code, info in _store.items():
+        name = info.get("name", "").lower()
+        code_str = code.lower()
+        
+        # Match if query appears in name or code
+        if query_lower in name or query_lower in code_str:
+            results.append({
+                "code": code,
+                "name": info.get("name", ""),
+                "exchange": info.get("exchange", ""),
+                "price": info.get("price"),
+                "change_pct": info.get("change_pct"),
+                "change": info.get("change"),
+            })
+            
+            if len(results) >= limit:
+                break
+    
+    return results

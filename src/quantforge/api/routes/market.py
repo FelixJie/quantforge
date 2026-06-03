@@ -53,6 +53,45 @@ def _resolve_exchange(symbol: str, exchange: str | None) -> Exchange:
 
 # ── Historical bars ───────────────────────────────────────────────────────────
 
+@router.get("/history")
+async def get_history(
+    symbol: str,
+    start: str = "2024-01-01",
+    end: str | None = None,
+    engine=Depends(get_backtest_engine),
+):
+    """Get historical OHLCV data - simplified API for frontend.
+
+    Returns array of {datetime, open, high, low, close, volume} objects.
+    Tries local storage first; if not found, attempts to download from API.
+    """
+    exc = _resolve_exchange(symbol, None)
+    start_dt = datetime.strptime(start, "%Y-%m-%d")
+    end_dt = datetime.strptime(end, "%Y-%m-%d") if end else datetime.now()
+
+    # Try local data first
+    df = engine._data_manager.load_bars(symbol, Interval.DAILY, start_dt, end_dt)
+    
+    if df.empty:
+        try:
+            # Try to download if not found locally
+            df = await engine._data_manager.download(
+                symbol=symbol,
+                interval=Interval.DAILY,
+                start=start_dt,
+                end=end_dt,
+                exchange=exc,
+            )
+        except Exception as e:
+            logger.warning(f"Failed to download {symbol}: {e}")
+            # If download also fails, return empty array instead of 404
+            return []
+    
+    records = df[["datetime", "open", "high", "low", "close", "volume"]].copy()
+    records["datetime"] = records["datetime"].dt.strftime("%Y-%m-%d")
+    return records.to_dict(orient="records")
+
+
 @router.get("/bars/{symbol}")
 async def get_bars(
     symbol: str,
@@ -276,6 +315,70 @@ async def search_symbols(query: str):
         ]
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"Search unavailable: {e}")
+
+
+@router.get("/all-stocks")
+async def get_all_stocks(
+    sort_by: str = "code",  # code, name, change_pct, price
+    order: str = "asc",     # asc, desc
+    page: int = 1,
+    page_size: int = 100,
+    filter_type: str | None = None,  # gainers, losers, volume_leaders
+):
+    """Get all stocks with pagination, sorting and filtering.
+    
+    - filter_type: 'gainers' (top 20 by change_pct), 'losers' (bottom 20),
+                   'volume_leaders' (top 20 by volume)
+    """
+    from quantforge.data.storage.stock_meta_cache import _store, search_stocks, get_stocks_by_filter
+    
+    # Build base results list
+    if filter_type == "gainers":
+        # Top 20 by change_pct descending
+        stocks = get_stocks_by_filter(
+            filter_func=lambda code, info: info.get("change_pct") is not None,
+            limit=2000
+        )
+        stocks.sort(key=lambda x: x.get("change_pct") or 0, reverse=True)
+        stocks = stocks[:50]
+    elif filter_type == "losers":
+        # Bottom 20 by change_pct ascending
+        stocks = get_stocks_by_filter(
+            filter_func=lambda code, info: info.get("change_pct") is not None,
+            limit=2000
+        )
+        stocks.sort(key=lambda x: x.get("change_pct") or 0)
+        stocks = stocks[:50]
+    elif filter_type == "volume_leaders":
+        # Will be handled when volume data is available
+        stocks = get_stocks_by_filter(limit=2000)
+    else:
+        stocks = get_stocks_by_filter(limit=10000)
+    
+    # Apply sorting
+    if sort_by == "name":
+        stocks.sort(key=lambda x: x.get("name", ""), reverse=(order == "desc"))
+    elif sort_by == "change_pct":
+        stocks.sort(key=lambda x: x.get("change_pct") or 0, reverse=(order == "desc"))
+    elif sort_by == "price":
+        stocks.sort(key=lambda x: x.get("price") or 0, reverse=(order == "desc"))
+    else:  # sort_by == "code"
+        stocks.sort(key=lambda x: x.get("code", ""), reverse=(order == "desc"))
+    
+    # Calculate pagination
+    total = len(stocks)
+    total_pages = (total + page_size - 1) // page_size
+    start_idx = (page - 1) * page_size
+    end_idx = start_idx + page_size
+    paginated = stocks[start_idx:end_idx]
+    
+    return {
+        "stocks": paginated,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": total_pages,
+    }
 
 
 # ── Market overview endpoints ─────────────────────────────────────────────────

@@ -10,11 +10,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from quantforge.api.routes import (
-    ai_picks, backtest, market, news, optimizer, portfolio,
-    screener, sector, strategy, strategy_editor, system,
+    ai_picks, auth, backtest, capital_flow, market, news, optimizer, portfolio,
+    research, screener, sector, signal_hub, strategy, strategy_editor, system,
 )
 from quantforge.api.routes import (
     accounts, llm_stats, notification, predictions, yaml_strategy, stock_analysis,
+    watchlist, alert, stock_data,
 )
 
 
@@ -55,6 +56,7 @@ def create_app() -> FastAPI:
     )
 
     # Register routers
+    app.include_router(auth.router, prefix="/api")
     app.include_router(ai_picks.router, prefix="/api")
     app.include_router(system.router, prefix="/api")
     app.include_router(strategy.router, prefix="/api")
@@ -72,6 +74,12 @@ def create_app() -> FastAPI:
     app.include_router(llm_stats.router, prefix="/api")
     app.include_router(stock_analysis.router, prefix="/api")
     app.include_router(accounts.router, prefix="/api")
+    app.include_router(research.router, prefix="/api")
+    app.include_router(capital_flow.router, prefix="/api")
+    app.include_router(signal_hub.router, prefix="/api")
+    app.include_router(watchlist.router, prefix="/api")
+    app.include_router(alert.router, prefix="/api")
+    app.include_router(stock_data.router, prefix="/api")
 
     # Serve built frontend — resolve relative to this file's location
     # app.py lives at: <project_root>/src/quantforge/api/app.py

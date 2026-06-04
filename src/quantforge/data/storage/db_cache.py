@@ -172,6 +172,18 @@ CREATE TABLE IF NOT EXISTS sector_constituents (
 );
 CREATE INDEX IF NOT EXISTS idx_sector_cons_board ON sector_constituents(kind, board);
 CREATE INDEX IF NOT EXISTS idx_sector_cons_code  ON sector_constituents(code);
+
+-- Per-account watchlist (durable user data, not wiped by cache clear)
+CREATE TABLE IF NOT EXISTS watchlist (
+    user_id   TEXT NOT NULL,
+    code      TEXT NOT NULL,
+    name      TEXT,
+    notes     TEXT DEFAULT '',
+    tags      TEXT DEFAULT '[]',     -- JSON array
+    added_at  TEXT,
+    PRIMARY KEY (user_id, code)
+);
+CREATE INDEX IF NOT EXISTS idx_watchlist_user ON watchlist(user_id);
 """
 
 
@@ -672,6 +684,108 @@ def sector_constituents_fresh(kind: str, board: str, ttl_seconds: int) -> bool:
         return False
     age = _newest_age_seconds(rows)
     return age is not None and age <= ttl_seconds
+
+
+# ---------------------------------------------------------------------------
+# Watchlist (per-account)
+# ---------------------------------------------------------------------------
+
+def _row_to_watch(row: sqlite3.Row) -> dict:
+    try:
+        tags = json.loads(row["tags"]) if row["tags"] else []
+    except Exception:
+        tags = []
+    return {
+        "code": row["code"],
+        "name": row["name"] or row["code"],
+        "notes": row["notes"] or "",
+        "tags": tags,
+        "added_at": row["added_at"],
+    }
+
+
+def get_watchlist(user_id: str) -> list[dict]:
+    try:
+        rows = _conn().execute(
+            "SELECT * FROM watchlist WHERE user_id=? ORDER BY added_at", (user_id,)
+        ).fetchall()
+    except Exception as exc:
+        logger.debug(f"db_cache.get_watchlist({user_id!r}) failed: {exc}")
+        return []
+    return [_row_to_watch(r) for r in rows]
+
+
+def watchlist_get_item(user_id: str, code: str) -> dict | None:
+    try:
+        row = _conn().execute(
+            "SELECT * FROM watchlist WHERE user_id=? AND code=?", (user_id, code)
+        ).fetchone()
+    except Exception:
+        return None
+    return _row_to_watch(row) if row else None
+
+
+def watchlist_add(user_id: str, code: str, name: str = "", notes: str = "",
+                  tags: list[str] | None = None) -> dict | None:
+    """Insert a watchlist row. Returns the new item, or None if it already existed."""
+    if watchlist_get_item(user_id, code) is not None:
+        return None
+    item = {
+        "code": code,
+        "name": name or code,
+        "notes": notes or "",
+        "tags": tags or [],
+        "added_at": _now_iso(),
+    }
+    with _write_lock:
+        try:
+            _conn().execute(
+                "INSERT INTO watchlist(user_id, code, name, notes, tags, added_at) "
+                "VALUES(?, ?, ?, ?, ?, ?)",
+                (user_id, code, item["name"], item["notes"],
+                 json.dumps(item["tags"], ensure_ascii=False), item["added_at"]),
+            )
+        except Exception as exc:
+            logger.warning(f"db_cache.watchlist_add failed: {exc}")
+            return None
+    return item
+
+
+def watchlist_remove(user_id: str, code: str) -> bool:
+    with _write_lock:
+        try:
+            cur = _conn().execute(
+                "DELETE FROM watchlist WHERE user_id=? AND code=?", (user_id, code)
+            )
+            return (cur.rowcount or 0) > 0
+        except Exception as exc:
+            logger.debug(f"db_cache.watchlist_remove failed: {exc}")
+            return False
+
+
+def watchlist_update_notes(user_id: str, code: str, notes: str) -> dict | None:
+    with _write_lock:
+        try:
+            cur = _conn().execute(
+                "UPDATE watchlist SET notes=? WHERE user_id=? AND code=?",
+                (notes or "", user_id, code),
+            )
+            if (cur.rowcount or 0) == 0:
+                return None
+        except Exception as exc:
+            logger.warning(f"db_cache.watchlist_update_notes failed: {exc}")
+            return None
+    return watchlist_get_item(user_id, code)
+
+
+def watchlist_clear(user_id: str) -> int:
+    with _write_lock:
+        try:
+            cur = _conn().execute("DELETE FROM watchlist WHERE user_id=?", (user_id,))
+            return cur.rowcount or 0
+        except Exception as exc:
+            logger.debug(f"db_cache.watchlist_clear failed: {exc}")
+            return 0
 
 
 # ---------------------------------------------------------------------------

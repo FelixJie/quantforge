@@ -1,34 +1,35 @@
-"""User watchlist API — per-user stock watchlist with metadata.
+"""User watchlist API — per-account stock watchlist with metadata.
 
 Endpoints:
   GET    /api/watchlist/           → current user's watchlist
   POST   /api/watchlist/           → add stock to watchlist
   DELETE /api/watchlist/{code}     → remove stock from watchlist
-  GET    /api/watchlist/overview   → enriched watchlist (realtime quotes + charts)
+  GET    /api/watchlist/overview   → enriched watchlist (realtime quotes)
   PUT    /api/watchlist/{code}/notes → update notes for a stock
+  DELETE /api/watchlist/           → clear watchlist
 
-Data persistence:
-  Each user has an independent watchlist stored under `data/watchlists/{user_id}.json`.
-  Watchlist items carry: {code, name, added_at, notes, tags[]}.
+Storage:
+  Per-account rows in the ``watchlist`` table of ``data/cache.db`` (SQLite),
+  keyed by (user_id, code).  Quotes are sourced from Tencent (qt.gtimg.cn),
+  which works behind proxies that hijack EastMoney.
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from loguru import logger
 from pydantic import BaseModel, Field
 
 from quantforge.api.routes.auth import get_current_user
+from quantforge.data.storage import db_cache
 
 router = APIRouter(prefix="/watchlist", tags=["watchlist"])
-
-_DATA_DIR = Path(__file__).parent.parent.parent.parent.parent / "data"
-_WATCHLIST_DIR = _DATA_DIR / "watchlists"
-_WATCHLIST_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # ── Schemas ────────────────────────────────────────────────────────────────
@@ -36,7 +37,7 @@ _WATCHLIST_DIR.mkdir(parents=True, exist_ok=True)
 class WatchlistItem(BaseModel):
     code: str
     name: str
-    added_at: str
+    added_at: Optional[str] = None
     notes: Optional[str] = ""
     tags: List[str] = Field(default_factory=list)
 
@@ -52,113 +53,68 @@ class WatchlistUpdateNotes(BaseModel):
     notes: str
 
 
-class WatchlistOverviewItem(WatchlistItem):
-    price: Optional[float] = None
-    change_pct: Optional[float] = None
-    change: Optional[float] = None
-    volume: Optional[float] = None
-    turnover: Optional[float] = None
-    high: Optional[float] = None
-    low: Optional[float] = None
-    pre_close: Optional[float] = None
+# ── Quote enrichment (Tencent — works behind proxy) ──────────────────────────
 
-
-# ── File helpers ────────────────────────────────────────────────────────────
-
-def _path_for(user_id: str) -> Path:
-    return _WATCHLIST_DIR / f"{user_id}.json"
-
-
-def _load(user_id: str) -> dict:
-    p = _path_for(user_id)
-    if p.exists():
-        try:
-            return json.loads(p.read_text(encoding="utf-8"))
-        except Exception:
-            pass
-    return {"items": [], "updated_at": None}
-
-
-def _save(user_id: str, data: dict) -> None:
-    data["updated_at"] = datetime.utcnow().isoformat(timespec="seconds")
-    _path_for(user_id).write_text(
-        json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
-
-
-def _enrich_with_quotes(items: List[dict]) -> List[dict]:
-    """Best-effort: attach latest market quote to each item.
-
-    Uses the same efinance endpoint as the `market` router so we don't introduce
-    a heavy dependency here.  If fetching fails, the items are returned without
-    quote data (the UI handles missing fields gracefully).
-    """
-    import asyncio
-
-    codes = [it["code"] for it in items]
-    if not codes:
-        return [dict(it) for it in items]
-
-    try:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            quote_map = loop.run_until_complete(_fetch_quotes(codes))
-        finally:
-            loop.close()
-    except Exception:
-        quote_map = {}
-
-    result = []
-    for it in items:
-        row = dict(it)
-        q = quote_map.get(it["code"]) or {}
-        row.update(q)
-        result.append(row)
-    return result
+def _quote_fields(q: dict) -> dict:
+    """Map a Tencent quote dict to the overview's quote fields."""
+    amt_wan = q.get("amount_wan")
+    return {
+        "price":      q.get("price"),
+        "change_pct": q.get("change_pct"),
+        "change":     q.get("change_amt"),
+        "high":       q.get("high"),
+        "low":        q.get("low"),
+        "pre_close":  q.get("last_close"),
+        "turnover":   amt_wan * 10000 if amt_wan else None,
+        "pe":         q.get("pe_ttm"),
+        "pb":         q.get("pb"),
+        "turnover_rate": q.get("turnover_pct"),
+    }
 
 
 async def _fetch_quotes(codes: List[str]) -> dict:
-    """Fetch latest quotes from efinance for a list of codes.  Returns {code: quote_dict}."""
-    try:
-        import efinance as ef
-
-        def _sync():
-            try:
-                df = ef.stock.get_latest_quote(codes)
-                if df is None or df.empty:
-                    return {}
-            except Exception:
-                return {}
-            out = {}
-            for _, row in df.iterrows():
-                try:
-                    code = str(row.iloc[0]).strip()
-                    price = float(row.iloc[3]) if len(row) > 3 else None
-                    change_pct = float(row.iloc[2]) if len(row) > 2 else None
-                    change = float(row.iloc[13]) if len(row) > 13 else None
-                    volume = float(row.iloc[6]) if len(row) > 6 else None
-                    turnover = float(row.iloc[7]) if len(row) > 7 else None
-                    high = float(row.iloc[4]) if len(row) > 4 else None
-                    low = float(row.iloc[5]) if len(row) > 5 else None
-                    pre_close = float(row.iloc[13]) if len(row) > 13 else None
-                    out[code] = {
-                        "price": price,
-                        "change_pct": change_pct,
-                        "change": change,
-                        "volume": volume,
-                        "turnover": turnover,
-                        "high": high,
-                        "low": low,
-                        "pre_close": pre_close,
-                    }
-                except (ValueError, TypeError, IndexError):
-                    continue
-            return out
-
-        return await asyncio.to_thread(_sync)
-    except Exception:
+    if not codes:
         return {}
+    try:
+        from quantforge.data.feed.mootdx_feed import _tencent_quote
+        raw = await asyncio.to_thread(_tencent_quote, codes)
+    except Exception as e:
+        logger.debug(f"watchlist quote fetch failed: {e}")
+        return {}
+    return {code: _quote_fields(q) for code, q in raw.items()}
+
+
+# ── One-time migration from legacy data/watchlists/{user}.json ───────────────
+
+_LEGACY_DIR = Path(__file__).parent.parent.parent.parent.parent / "data" / "watchlists"
+
+
+def _migrate_legacy(user_id: str) -> None:
+    """Best-effort import of a user's old JSON watchlist into the DB (once)."""
+    f = _LEGACY_DIR / f"{user_id}.json"
+    if not f.exists():
+        return
+    if db_cache.get_watchlist(user_id):
+        return  # already has DB rows — don't clobber
+    try:
+        data = json.loads(f.read_text(encoding="utf-8"))
+    except Exception:
+        return
+    migrated = 0
+    for it in data.get("items", []):
+        code = (it.get("code") or "").strip().upper()
+        if not code:
+            continue
+        if db_cache.watchlist_add(
+            user_id, code, it.get("name", ""), it.get("notes", ""), it.get("tags") or []
+        ):
+            migrated += 1
+    if migrated:
+        logger.info(f"watchlist: migrated {migrated} legacy items for user {user_id}")
+        try:
+            f.rename(f.with_suffix(".json.migrated"))
+        except Exception:
+            pass
 
 
 # ── Routes ──────────────────────────────────────────────────────────────────
@@ -166,17 +122,20 @@ async def _fetch_quotes(codes: List[str]) -> dict:
 @router.get("/", response_model=List[WatchlistItem])
 async def get_watchlist(current_user: dict = Depends(get_current_user)):
     """Return the current user's watchlist (basic info — no quotes)."""
-    data = _load(current_user["id"])
-    return data.get("items", [])
+    uid = current_user["id"]
+    _migrate_legacy(uid)
+    return db_cache.get_watchlist(uid)
 
 
 @router.get("/overview")
 async def get_watchlist_overview(current_user: dict = Depends(get_current_user)):
-    """Return the watchlist enriched with latest market quotes."""
-    data = _load(current_user["id"])
-    items = data.get("items", [])
-    enriched = _enrich_with_quotes(items)
-    return {"items": enriched, "count": len(enriched), "updated_at": data.get("updated_at")}
+    """Return the watchlist enriched with latest market quotes (Tencent)."""
+    uid = current_user["id"]
+    _migrate_legacy(uid)
+    items = db_cache.get_watchlist(uid)
+    quote_map = await _fetch_quotes([it["code"] for it in items])
+    enriched = [{**it, **(quote_map.get(it["code"]) or {})} for it in items]
+    return {"items": enriched, "count": len(enriched), "updated_at": datetime.utcnow().isoformat(timespec="seconds")}
 
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
@@ -184,40 +143,32 @@ async def add_to_watchlist(
     req: WatchlistAddRequest,
     current_user: dict = Depends(get_current_user),
 ):
-    """Add a stock to the user's watchlist.  Duplicate codes are ignored (idempotent)."""
+    """Add a stock to the user's watchlist (idempotent on code)."""
     code = req.code.strip().upper()
     if not code:
         raise HTTPException(status_code=400, detail="股票代码不能为空")
 
-    data = _load(current_user["id"])
-    items = data.get("items", [])
+    uid = current_user["id"]
+    existing = db_cache.watchlist_get_item(uid, code)
+    if existing is not None:
+        return {"status": "exists", "item": existing}
 
-    # Check existence
-    for it in items:
-        if it["code"] == code:
-            return {"status": "exists", "item": it}
-
-    # Try to auto-resolve the name from market metadata cache if caller didn't supply one
+    # Resolve name from stock_meta if not supplied
     name = req.name or ""
     if not name:
         try:
-            from quantforge.data.storage.stock_meta_cache import _store
-            if code in _store:
-                name = _store[code].get("name", "")
+            meta = db_cache.get_stock(code)
+            if meta:
+                name = meta.get("name", "")
         except Exception:
             pass
 
-    new_item = {
-        "code": code,
-        "name": name or code,
-        "added_at": datetime.utcnow().isoformat(timespec="seconds"),
-        "notes": req.notes or "",
-        "tags": req.tags or [],
-    }
-    items.append(new_item)
-    data["items"] = items
-    _save(current_user["id"], data)
-    return {"status": "added", "item": new_item, "count": len(items)}
+    item = db_cache.watchlist_add(uid, code, name, req.notes or "", req.tags or [])
+    if item is None:
+        # Race: inserted between check and add
+        return {"status": "exists", "item": db_cache.watchlist_get_item(uid, code)}
+    count = len(db_cache.get_watchlist(uid))
+    return {"status": "added", "item": item, "count": count}
 
 
 @router.delete("/{code}")
@@ -227,14 +178,10 @@ async def remove_from_watchlist(
 ):
     """Remove a stock from the user's watchlist by code."""
     code = code.strip().upper()
-    data = _load(current_user["id"])
-    items = data.get("items", [])
-    new_items = [it for it in items if it["code"] != code]
-    if len(new_items) == len(items):
+    if not db_cache.watchlist_remove(current_user["id"], code):
         raise HTTPException(status_code=404, detail="自选股中未找到该股票")
-    data["items"] = new_items
-    _save(current_user["id"], data)
-    return {"status": "removed", "code": code, "count": len(new_items)}
+    count = len(db_cache.get_watchlist(current_user["id"]))
+    return {"status": "removed", "code": code, "count": count}
 
 
 @router.put("/{code}/notes")
@@ -245,18 +192,14 @@ async def update_notes(
 ):
     """Update the user's personal notes for a specific stock."""
     code = code.strip().upper()
-    data = _load(current_user["id"])
-    items = data.get("items", [])
-    for it in items:
-        if it["code"] == code:
-            it["notes"] = req.notes or ""
-            _save(current_user["id"], data)
-            return {"status": "updated", "item": it}
-    raise HTTPException(status_code=404, detail="自选股中未找到该股票")
+    item = db_cache.watchlist_update_notes(current_user["id"], code, req.notes or "")
+    if item is None:
+        raise HTTPException(status_code=404, detail="自选股中未找到该股票")
+    return {"status": "updated", "item": item}
 
 
 @router.delete("/")
 async def clear_watchlist(current_user: dict = Depends(get_current_user)):
     """Remove all stocks from the user's watchlist."""
-    _save(current_user["id"], {"items": []})
-    return {"status": "cleared"}
+    n = db_cache.watchlist_clear(current_user["id"])
+    return {"status": "cleared", "count": n}

@@ -22,6 +22,8 @@ import pandas as pd
 from fastapi import APIRouter, HTTPException, Query
 from loguru import logger
 
+from quantforge.data.storage import db_cache
+
 router = APIRouter(prefix="/sector", tags=["sector"])
 
 _CACHE_DIR = Path("data/cache/sector")
@@ -254,24 +256,24 @@ def _sina_node_stocks(node: str, count: int = 0) -> list[dict]:
 
 
 async def _sina_boards_cached() -> list[dict]:
-    ck = "sina_industry_list"
-    cached = _load_cache(ck, _TTL_BOARDS)
+    ck = "sector:sina_industry_list"
+    cached = db_cache.get(ck, _TTL_BOARDS)
     if cached:
         return cached.get("boards", [])
     boards = await asyncio.to_thread(_sina_industry_list)
     if boards:
-        _save_cache(ck, {"boards": boards})
+        db_cache.set(ck, {"boards": boards}, _TTL_BOARDS, category="sector")
     return boards
 
 
 async def _sina_concept_boards_cached() -> list[dict]:
-    ck = "sina_concept_list"
-    cached = _load_cache(ck, _TTL_BOARDS)
+    ck = "sector:sina_concept_list"
+    cached = db_cache.get(ck, _TTL_BOARDS)
     if cached:
         return cached.get("boards", [])
     boards = await asyncio.to_thread(_sina_concept_list)
     if boards:
-        _save_cache(ck, {"boards": boards})
+        db_cache.set(ck, {"boards": boards}, _TTL_BOARDS, category="sector")
     return boards
 
 
@@ -280,52 +282,20 @@ async def _sina_concept_boards_cached() -> list[dict]:
 @router.get("/industry")
 async def get_industry_boards():
     """All A-share industry boards (Sina) with board-level stats."""
-    ck = "industry_boards"
-    cached = _load_cache(ck, _TTL_BOARDS)
-    if cached:
-        return cached
-
     try:
         boards = await _sina_boards_cached()
         if not boards:
             raise RuntimeError("空列表")
-        result = {"boards": boards, "count": len(boards), "type": "industry"}
-        _save_cache(ck, result)
-        return result
+        return {"boards": boards, "count": len(boards), "type": "industry"}
     except Exception as e:
         logger.warning(f"Industry boards fetch failed: {e}")
-        stale = _load_stale(ck)
-        if stale:
-            return stale
         raise HTTPException(status_code=503, detail=f"行业板块数据获取失败: {e}")
 
 
 @router.get("/industry/{name}")
 async def get_industry_stocks(name: str):
-    """Constituent stocks for a specific industry board (Sina)."""
-    ck = f"industry_cons_{name}"
-    cached = _load_cache(ck, _TTL_STOCKS)
-    if cached:
-        return cached
-
-    try:
-        boards = await _sina_boards_cached()
-        meta = next((b for b in boards if b["name"] == name or b["node"] == name), None)
-        if meta is None:
-            raise HTTPException(status_code=404, detail=f"未找到行业板块: {name}")
-        stocks = await asyncio.to_thread(_sina_node_stocks, meta["node"], meta["count"])
-        stocks.sort(key=lambda x: x.get("change_pct") or 0, reverse=True)
-        result = {"board": name, "stocks": stocks, "count": len(stocks)}
-        _save_cache(ck, result)
-        return result
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.warning(f"Industry cons fetch failed for {name}: {e}")
-        stale = _load_stale(ck)
-        if stale:
-            return stale
-        raise HTTPException(status_code=503, detail=f"板块成分股获取失败: {e}")
+    """Constituent stocks for a specific industry board (Sina, stored in DB)."""
+    return await _drill_down("industry", name, _sina_boards_cached, "行业板块")
 
 
 # ── Concept endpoints ─────────────────────────────────────────────────────────
@@ -334,54 +304,22 @@ async def get_industry_stocks(name: str):
 async def get_concept_boards():
     """All A-share concept boards (Sina). market_cap proxied by turnover so the
     treemap still renders (Sina's cheap list has no board market cap)."""
-    ck = "concept_boards"
-    cached = _load_cache(ck, _TTL_BOARDS)
-    if cached:
-        return cached
-
     try:
         boards = await _sina_concept_boards_cached()
         if not boards:
             raise RuntimeError("空列表")
         for b in boards:
             b["market_cap"] = b.get("amount")   # treemap area = turnover
-        result = {"boards": boards, "count": len(boards), "type": "concept"}
-        _save_cache(ck, result)
-        return result
+        return {"boards": boards, "count": len(boards), "type": "concept"}
     except Exception as e:
         logger.warning(f"Concept boards fetch failed: {e}")
-        stale = _load_stale(ck)
-        if stale:
-            return stale
         raise HTTPException(status_code=503, detail=f"概念板块数据获取失败: {e}")
 
 
 @router.get("/concept/{name}")
 async def get_concept_stocks(name: str):
-    """Constituent stocks for a specific concept board (Sina)."""
-    ck = f"concept_cons_{name}"
-    cached = _load_cache(ck, _TTL_STOCKS)
-    if cached:
-        return cached
-
-    try:
-        boards = await _sina_concept_boards_cached()
-        meta = next((b for b in boards if b["name"] == name or b["node"] == name), None)
-        if meta is None:
-            raise HTTPException(status_code=404, detail=f"未找到概念板块: {name}")
-        stocks = await asyncio.to_thread(_sina_node_stocks, meta["node"], meta["count"])
-        stocks.sort(key=lambda x: x.get("change_pct") or 0, reverse=True)
-        result = {"board": name, "stocks": stocks, "count": len(stocks)}
-        _save_cache(ck, result)
-        return result
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.warning(f"Concept cons fetch failed for {name}: {e}")
-        stale = _load_stale(ck)
-        if stale:
-            return stale
-        raise HTTPException(status_code=503, detail=f"概念成分股获取失败: {e}")
+    """Constituent stocks for a specific concept board (Sina, stored in DB)."""
+    return await _drill_down("concept", name, _sina_concept_boards_cached, "概念板块")
 
 
 # ── Fund flow endpoint ────────────────────────────────────────────────────────
@@ -419,18 +357,44 @@ async def get_fund_flow(indicator: str = Query("今日", enum=["今日", "5日",
 
 # ── Industry summary endpoint ─────────────────────────────────────────────────
 
-async def _node_stocks_cached(meta: dict, prefix: str) -> list[dict]:
-    """Cached constituents for a board, keyed `{prefix}_cons_{name}` so the
-    summary and the drill-down endpoints share the same per-board cache."""
-    ck = f"{prefix}_cons_{meta['name']}"
-    cached = _load_cache(ck, _TTL_STOCKS)
-    if cached:
-        return cached.get("stocks", [])
+async def _node_stocks_cached(meta: dict, kind: str) -> list[dict]:
+    """Constituents for a board, stored in the sector_constituents table.
+
+    Summary and drill-down share the same per-board rows (keyed kind+name)."""
+    name = meta["name"]
+    if db_cache.sector_constituents_fresh(kind, name, _TTL_STOCKS):
+        return db_cache.get_sector_constituents(kind, name) or []
     stocks = await asyncio.to_thread(_sina_node_stocks, meta["node"], meta["count"])
     stocks.sort(key=lambda x: x.get("change_pct") or 0, reverse=True)
     if stocks:
-        _save_cache(ck, {"board": meta["name"], "stocks": stocks, "count": len(stocks)})
+        db_cache.replace_sector_constituents(kind, name, stocks)
+    else:
+        stale = db_cache.get_sector_constituents(kind, name)
+        if stale:
+            return stale
     return stocks
+
+
+async def _drill_down(kind: str, name: str, boards_loader, label: str) -> dict:
+    """Resolve a board's constituents (DB-first, then Sina) for a drill-down."""
+    if db_cache.sector_constituents_fresh(kind, name, _TTL_STOCKS):
+        stocks = db_cache.get_sector_constituents(kind, name) or []
+        return {"board": name, "stocks": stocks, "count": len(stocks)}
+    try:
+        boards = await boards_loader()
+        meta = next((b for b in boards if b["name"] == name or b["node"] == name), None)
+        if meta is None:
+            raise HTTPException(status_code=404, detail=f"未找到{label}: {name}")
+        stocks = await _node_stocks_cached(meta, kind)
+        return {"board": name, "stocks": stocks, "count": len(stocks)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"{kind} cons fetch failed for {name}: {e}")
+        stale = db_cache.get_sector_constituents(kind, name)
+        if stale:
+            return {"board": name, "stocks": stale, "count": len(stale)}
+        raise HTTPException(status_code=503, detail=f"{label}成分股获取失败: {e}")
 
 
 def _summarise_industry_board(board: dict, stocks: list[dict]) -> dict:
@@ -478,6 +442,7 @@ async def _build_summary(boards: list[dict], prefix: str) -> list[dict]:
 
         board = {
             "name":          meta["name"],
+            "node":          meta.get("node"),
             "change_pct":    meta.get("change_pct"),
             "market_cap":    round(mcap, 2) if mcap else None,
             "turnover_rate": round(sum(turs) / len(turs), 4) if turs else None,
@@ -491,31 +456,33 @@ async def _build_summary(boards: list[dict], prefix: str) -> list[dict]:
     return await asyncio.gather(*[enrich(b) for b in boards])
 
 
+def _boards_result(kind: str, boards: list[dict]) -> dict:
+    return {"boards": boards, "count": len(boards), "type": kind}
+
+
 async def _summary_endpoint(kind: str, boards_loader, label: str) -> dict:
-    ck = f"{kind}_summary"
-    cached = _load_cache(ck, _TTL_PE)
-    if cached:
-        return cached
+    # Serve from the sector_boards table while fresh.
+    if db_cache.sector_boards_fresh(kind, _TTL_PE):
+        return _boards_result(kind, db_cache.get_sector_boards(kind) or [])
 
     try:
-        boards = await boards_loader()
+        metas = await boards_loader()
     except Exception as e:
         logger.warning(f"{kind} summary board list fetch failed: {e}")
-        stale = _load_stale(ck)
+        stale = db_cache.get_sector_boards(kind)
         if stale:
-            return stale
+            return _boards_result(kind, stale)
         raise HTTPException(status_code=503, detail=f"{label}数据获取失败（数据源不可达）: {e}")
 
-    if not boards:
-        stale = _load_stale(ck)
+    if not metas:
+        stale = db_cache.get_sector_boards(kind)
         if stale:
-            return stale
+            return _boards_result(kind, stale)
         raise HTTPException(status_code=503, detail=f"{label}列表为空")
 
-    enriched = await _build_summary(boards, kind)
-    result = {"boards": enriched, "count": len(enriched), "type": kind}
-    _save_cache(ck, result)
-    return result
+    enriched = await _build_summary(metas, kind)
+    db_cache.replace_sector_boards(kind, enriched)
+    return _boards_result(kind, enriched)
 
 
 @router.get("/industry-summary")

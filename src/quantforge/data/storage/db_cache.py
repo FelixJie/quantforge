@@ -130,6 +130,48 @@ CREATE TABLE IF NOT EXISTS stock_meta (
 );
 CREATE INDEX IF NOT EXISTS idx_stock_meta_name     ON stock_meta(name);
 CREATE INDEX IF NOT EXISTS idx_stock_meta_exchange ON stock_meta(exchange);
+
+-- Sector boards (one row per industry/concept board, current snapshot)
+CREATE TABLE IF NOT EXISTS sector_boards (
+    kind          TEXT NOT NULL,            -- 'industry' | 'concept'
+    name          TEXT NOT NULL,
+    node          TEXT,                      -- Sina node code (new_*/gn_*)
+    change_pct    REAL,
+    avg_pe        REAL,
+    median_pe     REAL,
+    avg_pb        REAL,
+    pe_valid      INTEGER,
+    turnover_rate REAL,
+    market_cap    REAL,
+    amount        REAL,
+    up_count      INTEGER,
+    down_count    INTEGER,
+    total         INTEGER,
+    leader        TEXT,
+    leader_change REAL,
+    updated_at    TEXT,
+    PRIMARY KEY (kind, name)
+);
+CREATE INDEX IF NOT EXISTS idx_sector_boards_kind ON sector_boards(kind);
+
+-- Sector constituents (one row per stock per board)
+CREATE TABLE IF NOT EXISTS sector_constituents (
+    kind          TEXT NOT NULL,
+    board         TEXT NOT NULL,
+    code          TEXT NOT NULL,
+    name          TEXT,
+    price         REAL,
+    change_pct    REAL,
+    turnover_rate REAL,
+    turnover      REAL,                      -- 成交额 (元)
+    pe            REAL,
+    pb            REAL,
+    market_cap    REAL,
+    updated_at    TEXT,
+    PRIMARY KEY (kind, board, code)
+);
+CREATE INDEX IF NOT EXISTS idx_sector_cons_board ON sector_constituents(kind, board);
+CREATE INDEX IF NOT EXISTS idx_sector_cons_code  ON sector_constituents(code);
 """
 
 
@@ -491,6 +533,145 @@ def clear_stock_meta() -> None:
             _conn().execute("DELETE FROM stock_meta;")
         except Exception as exc:
             logger.debug(f"db_cache.clear_stock_meta failed: {exc}")
+
+
+# ---------------------------------------------------------------------------
+# Sector tables (structured storage for industry/concept boards + constituents)
+# ---------------------------------------------------------------------------
+
+_BOARD_COLS = [
+    "kind", "name", "node", "change_pct", "avg_pe", "median_pe", "avg_pb",
+    "pe_valid", "turnover_rate", "market_cap", "amount", "up_count",
+    "down_count", "total", "leader", "leader_change",
+]
+
+_CONS_COLS = [
+    "code", "name", "price", "change_pct", "turnover_rate", "turnover",
+    "pe", "pb", "market_cap",
+]
+
+
+def _newest_age_seconds(rows: list[sqlite3.Row]) -> float | None:
+    """Seconds since the most recently updated row (None if no timestamps)."""
+    stamps = [_parse_iso(r["updated_at"]) for r in rows if r["updated_at"]]
+    stamps = [s for s in stamps if s is not None]
+    if not stamps:
+        return None
+    return (datetime.now() - max(stamps)).total_seconds()
+
+
+def replace_sector_boards(kind: str, boards: list[dict]) -> int:
+    """Replace the whole snapshot of boards for ``kind`` (delete + insert)."""
+    now = _now_iso()
+    rows = []
+    for b in boards:
+        vals = [kind if c == "kind" else b.get(c) for c in _BOARD_COLS]
+        rows.append(tuple(vals) + (now,))
+    placeholders = ",".join("?" * (len(_BOARD_COLS) + 1))
+    cols = ",".join(_BOARD_COLS) + ",updated_at"
+    with _write_lock:
+        try:
+            conn = _conn()
+            conn.execute("DELETE FROM sector_boards WHERE kind=?", (kind,))
+            conn.executemany(
+                f"INSERT INTO sector_boards({cols}) VALUES({placeholders})", rows
+            )
+        except Exception as exc:
+            logger.warning(f"db_cache.replace_sector_boards({kind!r}) failed: {exc}")
+            return 0
+    return len(rows)
+
+
+def get_sector_boards(kind: str) -> list[dict] | None:
+    """All stored boards for ``kind`` (regardless of age). None if empty."""
+    try:
+        rows = _conn().execute(
+            "SELECT * FROM sector_boards WHERE kind=? ORDER BY name", (kind,)
+        ).fetchall()
+    except Exception as exc:
+        logger.debug(f"db_cache.get_sector_boards({kind!r}) failed: {exc}")
+        return None
+    if not rows:
+        return None
+    out = []
+    for r in rows:
+        d = dict(r)
+        d.pop("updated_at", None)
+        out.append(d)
+    return out
+
+
+def sector_boards_fresh(kind: str, ttl_seconds: int) -> bool:
+    try:
+        rows = _conn().execute(
+            "SELECT updated_at FROM sector_boards WHERE kind=?", (kind,)
+        ).fetchall()
+    except Exception:
+        return False
+    age = _newest_age_seconds(rows)
+    return age is not None and age <= ttl_seconds
+
+
+def replace_sector_constituents(kind: str, board: str, stocks: list[dict]) -> int:
+    """Replace the constituent snapshot for one (kind, board)."""
+    now = _now_iso()
+    rows = []
+    for s in stocks:
+        vals = [kind, board] + [s.get(c) for c in _CONS_COLS]
+        rows.append(tuple(vals) + (now,))
+    cols = "kind,board," + ",".join(_CONS_COLS) + ",updated_at"
+    placeholders = ",".join("?" * (len(_CONS_COLS) + 3))
+    with _write_lock:
+        try:
+            conn = _conn()
+            conn.execute(
+                "DELETE FROM sector_constituents WHERE kind=? AND board=?", (kind, board)
+            )
+            conn.executemany(
+                f"INSERT INTO sector_constituents({cols}) VALUES({placeholders})", rows
+            )
+        except Exception as exc:
+            logger.warning(
+                f"db_cache.replace_sector_constituents({kind!r},{board!r}) failed: {exc}"
+            )
+            return 0
+    return len(rows)
+
+
+def get_sector_constituents(kind: str, board: str) -> list[dict] | None:
+    try:
+        rows = _conn().execute(
+            "SELECT * FROM sector_constituents WHERE kind=? AND board=? "
+            "ORDER BY change_pct DESC",
+            (kind, board),
+        ).fetchall()
+    except Exception as exc:
+        logger.debug(
+            f"db_cache.get_sector_constituents({kind!r},{board!r}) failed: {exc}"
+        )
+        return None
+    if not rows:
+        return None
+    out = []
+    for r in rows:
+        d = dict(r)
+        d.pop("kind", None)
+        d.pop("board", None)
+        d.pop("updated_at", None)
+        out.append(d)
+    return out
+
+
+def sector_constituents_fresh(kind: str, board: str, ttl_seconds: int) -> bool:
+    try:
+        rows = _conn().execute(
+            "SELECT updated_at FROM sector_constituents WHERE kind=? AND board=?",
+            (kind, board),
+        ).fetchall()
+    except Exception:
+        return False
+    age = _newest_age_seconds(rows)
+    return age is not None and age <= ttl_seconds
 
 
 # ---------------------------------------------------------------------------

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
@@ -53,6 +54,14 @@ class WatchlistUpdateNotes(BaseModel):
     notes: str
 
 
+class WatchlistSetTags(BaseModel):
+    tags: List[str] = Field(default_factory=list)
+
+
+class WatchlistBatchAdd(BaseModel):
+    items: List[WatchlistAddRequest]
+
+
 class VerificationCreate(BaseModel):
     periodDays: int = 0
     startDate: str = ""
@@ -79,6 +88,7 @@ def _quote_fields(q: dict) -> dict:
     """Map a Tencent quote dict to the overview's quote fields."""
     amt_wan = q.get("amount_wan")
     return {
+        "name":       q.get("name"),
         "price":      q.get("price"),
         "change_pct": q.get("change_pct"),
         "change":     q.get("change_amt"),
@@ -92,16 +102,42 @@ def _quote_fields(q: dict) -> dict:
     }
 
 
+# Tiny in-process quote cache: dedupes Tencent calls across users / rapid
+# refreshes.  Per-code so different watchlists share entries.
+_quote_cache: dict[str, tuple[float, dict]] = {}
+_QUOTE_TTL = 15.0  # seconds
+
+
 async def _fetch_quotes(codes: List[str]) -> dict:
     if not codes:
         return {}
+    now = time.time()
+    fresh = {c: v for c in codes
+             for ts, v in [_quote_cache.get(c, (0, None))] if v and now - ts <= _QUOTE_TTL}
+    missing = [c for c in codes if c not in fresh]
+    if missing:
+        try:
+            from quantforge.data.feed.mootdx_feed import _tencent_quote
+            raw = await asyncio.to_thread(_tencent_quote, missing)
+            for code, q in raw.items():
+                fields = _quote_fields(q)
+                _quote_cache[code] = (now, fields)
+                fresh[code] = fields
+        except Exception as e:
+            logger.debug(f"watchlist quote fetch failed: {e}")
+    return {c: fresh[c] for c in codes if c in fresh}
+
+
+async def _resolve_name(code: str) -> str:
+    """Best-effort stock name: stock_meta cache → Tencent quote."""
     try:
-        from quantforge.data.feed.mootdx_feed import _tencent_quote
-        raw = await asyncio.to_thread(_tencent_quote, codes)
-    except Exception as e:
-        logger.debug(f"watchlist quote fetch failed: {e}")
-        return {}
-    return {code: _quote_fields(q) for code, q in raw.items()}
+        meta = db_cache.get_stock(code)
+        if meta and meta.get("name"):
+            return meta["name"]
+    except Exception:
+        pass
+    q = (await _fetch_quotes([code])).get(code) or {}
+    return q.get("name") or ""
 
 
 # ── One-time migration from legacy data/watchlists/{user}.json ───────────────
@@ -173,16 +209,7 @@ async def add_to_watchlist(
     if existing is not None:
         return {"status": "exists", "item": existing}
 
-    # Resolve name from stock_meta if not supplied
-    name = req.name or ""
-    if not name:
-        try:
-            meta = db_cache.get_stock(code)
-            if meta:
-                name = meta.get("name", "")
-        except Exception:
-            pass
-
+    name = req.name or await _resolve_name(code)
     item = db_cache.watchlist_add(uid, code, name, req.notes or "", req.tags or [])
     if item is None:
         # Race: inserted between check and add
@@ -216,6 +243,56 @@ async def update_notes(
     if item is None:
         raise HTTPException(status_code=404, detail="自选股中未找到该股票")
     return {"status": "updated", "item": item}
+
+
+@router.get("/tags")
+async def list_tags(current_user: dict = Depends(get_current_user)):
+    """Distinct tags across the user's watchlist with usage counts."""
+    return db_cache.watchlist_tags(current_user["id"])
+
+
+@router.put("/{code}/tags")
+async def set_tags(
+    code: str,
+    req: WatchlistSetTags,
+    current_user: dict = Depends(get_current_user),
+):
+    """Replace the tag list for a watchlist stock."""
+    code = code.strip().upper()
+    tags = [t.strip() for t in (req.tags or []) if t.strip()]
+    item = db_cache.watchlist_set_tags(current_user["id"], code, tags)
+    if item is None:
+        raise HTTPException(status_code=404, detail="自选股中未找到该股票")
+    return {"status": "updated", "item": item}
+
+
+@router.post("/batch", status_code=status.HTTP_201_CREATED)
+async def batch_add(
+    req: WatchlistBatchAdd,
+    current_user: dict = Depends(get_current_user),
+):
+    """Add many stocks at once. Names auto-resolved (one quote call) when missing."""
+    uid = current_user["id"]
+    need = [i.code.strip().upper() for i in req.items if not (i.name or "").strip()]
+    qmap = await _fetch_quotes(need) if need else {}
+
+    added, skipped = [], []
+    for i in req.items:
+        code = i.code.strip().upper()
+        if not code or db_cache.watchlist_get_item(uid, code):
+            if code:
+                skipped.append(code)
+            continue
+        name = i.name or (qmap.get(code) or {}).get("name") or ""
+        item = db_cache.watchlist_add(uid, code, name, i.notes or "", i.tags or [])
+        (added if item else skipped).append(item or code)
+    return {
+        "status": "ok",
+        "added": added,
+        "added_count": len(added),
+        "skipped": skipped,
+        "count": len(db_cache.get_watchlist(uid)),
+    }
 
 
 @router.delete("/")

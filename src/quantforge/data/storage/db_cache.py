@@ -801,6 +801,31 @@ def watchlist_clear(user_id: str) -> int:
             return 0
 
 
+def watchlist_set_tags(user_id: str, code: str, tags: list[str]) -> dict | None:
+    with _write_lock:
+        try:
+            cur = _conn().execute(
+                "UPDATE watchlist SET tags=? WHERE user_id=? AND code=?",
+                (json.dumps(tags or [], ensure_ascii=False), user_id, code),
+            )
+            if (cur.rowcount or 0) == 0:
+                return None
+        except Exception as exc:
+            logger.warning(f"db_cache.watchlist_set_tags failed: {exc}")
+            return None
+    return watchlist_get_item(user_id, code)
+
+
+def watchlist_tags(user_id: str) -> list[dict]:
+    """Distinct tags for a user's watchlist with usage counts (desc)."""
+    counts: dict[str, int] = {}
+    for it in get_watchlist(user_id):
+        for t in it.get("tags") or []:
+            counts[t] = counts.get(t, 0) + 1
+    return [{"tag": k, "count": v}
+            for k, v in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))]
+
+
 def _row_to_verif(row: sqlite3.Row) -> dict:
     try:
         results = json.loads(row["results"]) if row["results"] else []

@@ -148,7 +148,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { useWatchlistStore } from '../stores/watchlist'
@@ -348,6 +348,12 @@ onMounted(async () => {
   // 自动加载全部股票数据
   await loadAllStocks()
   await loadWatchlistData()
+  // 自选股行情自动刷新（15s，页面隐藏时自动暂停）
+  watchlistStore.startAutoRefresh(15000)
+})
+
+onBeforeUnmount(() => {
+  watchlistStore.stopAutoRefresh()
 })
 
 watch(tab, (newTab) => {

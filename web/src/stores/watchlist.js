@@ -21,6 +21,9 @@ export const useWatchlistStore = defineStore('watchlist', () => {
   const searchResults = ref([])
   const refreshing = ref(false)
   const loaded = ref(false)
+  // 标签
+  const tags = ref([])
+  let _autoTimer = null
 
   const auth = useAuthStore()
 
@@ -102,6 +105,55 @@ export const useWatchlistStore = defineStore('watchlist', () => {
 
   function isInWatchlist(code) {
     return watchlist.value.some(s => s.code === code)
+  }
+
+  // ── 标签 / 备注 ───────────────────────────────────────────────────────────
+  async function loadTags() {
+    if (!auth.token) { tags.value = []; return }
+    try {
+      const res = await axios.get('/api/watchlist/tags')
+      tags.value = res.data || []
+    } catch (e) {
+      if (e.response?.status !== 401) console.error('Failed to load tags:', e)
+    }
+  }
+
+  async function setTags(code, tagList) {
+    try {
+      const res = await axios.put(`/api/watchlist/${code}/tags`, { tags: tagList || [] })
+      const item = watchlist.value.find(s => s.code === code)
+      if (item) item.tags = res.data.item.tags
+      await loadTags()
+      return true
+    } catch (e) {
+      console.error('Failed to set tags:', e)
+      return false
+    }
+  }
+
+  async function updateNotes(code, notes) {
+    try {
+      const res = await axios.put(`/api/watchlist/${code}/notes`, { notes: notes || '' })
+      const item = watchlist.value.find(s => s.code === code)
+      if (item) item.notes = res.data.item.notes
+      return true
+    } catch (e) {
+      console.error('Failed to update notes:', e)
+      return false
+    }
+  }
+
+  // ── 行情自动刷新（轮询）─────────────────────────────────────────────────
+  function startAutoRefresh(ms = 15000) {
+    stopAutoRefresh()
+    _autoTimer = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
+      if (watchlist.value.length) loadWatchlist()
+    }, ms)
+  }
+
+  function stopAutoRefresh() {
+    if (_autoTimer) { clearInterval(_autoTimer); _autoTimer = null }
   }
 
   // ── 搜索 ────────────────────────────────────────────────────────────────
@@ -263,16 +315,20 @@ export const useWatchlistStore = defineStore('watchlist', () => {
   watch(() => auth.user?.id, () => {
     loadVerifications()
     loadWatchlist()
+    loadTags()
   })
 
-  // 初始化：加载本账户验证记录 + 自选股
+  // 初始化：加载本账户数据
   loadVerifications()
   loadWatchlist()
+  loadTags()
 
   return {
-    watchlist, watchlistVerifications, realtimeData, miniChartData, shIndex,
+    watchlist, watchlistVerifications, realtimeData, miniChartData, shIndex, tags,
     loading, searching, refreshing, error, searchResults, loaded,
-    loadWatchlist, loadVerifications, searchStock, addToWatchlist, removeFromWatchlist, isInWatchlist,
+    loadWatchlist, loadVerifications, loadTags, setTags, updateNotes,
+    startAutoRefresh, stopAutoRefresh,
+    searchStock, addToWatchlist, removeFromWatchlist, isInWatchlist,
     addVerification, removeVerification, fetchStockInfo, verifyWatchlist,
     fetchShIndex, fetchRealtimeData, fetchMiniChartData, fetchAllMiniChartData,
     getStockInfo, refreshAll, loadFromStorage, saveToStorage,

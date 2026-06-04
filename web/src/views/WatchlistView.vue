@@ -271,7 +271,7 @@ async function loadAllStocks() {
   allStocksLoading.value = true
   try {
     const response = await axios.get('/api/market/all-stocks', {
-      params: { page_size: 500 }
+      params: { page_size: 8000 }
     })
     allStocks.value = response.data.stocks || []
   } catch (error) {
@@ -407,7 +407,87 @@ watch(tab, (newTab) => {
 
 <style scoped>
 .watchlist-page {
-  padding-bottom: 16px;
+  padding: 20px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ── Tab bar ─────────────────────────────────────────────── */
+.hub-tabs {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 3px;
+}
+.hub-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  border: none;
+  background: transparent;
+  color: var(--text-3);
+  font-size: 13px;
+  border-radius: calc(var(--radius-md) - 2px);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.hub-tab:hover { color: var(--text-1); }
+.hub-tab.active {
+  background: var(--bg-elevated);
+  color: var(--text-1);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+.tab-spacer { flex: 1; }
+.btn-refresh {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-2);
+  font-size: 12px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-refresh:hover:not(:disabled) { color: var(--text-1); border-color: var(--border-light); }
+.btn-refresh:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-refresh .spin { animation: wl-spin 0.9s linear infinite; }
+@keyframes wl-spin { to { transform: rotate(360deg); } }
+
+/* ── Panel (card container) ──────────────────────────────── */
+.panel {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: 16px;
+}
+.panel-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-1);
+  margin-bottom: 12px;
+}
+.panel-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 40px;
+  color: var(--text-2);
+  font-size: 13px;
+}
+.panel-empty {
+  text-align: center;
+  padding: 48px 20px;
+  color: var(--text-3);
+  font-size: 14px;
 }
 
 .empty-state {

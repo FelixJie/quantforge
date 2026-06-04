@@ -317,6 +317,95 @@ async def search_symbols(query: str):
         raise HTTPException(status_code=503, detail=f"Search unavailable: {e}")
 
 
+# ── Sina all-A-share source (works behind proxies that hijack EastMoney) ──────
+
+import re as _re
+import urllib.request as _urlreq
+from quantforge.data.storage import db_cache as _db
+
+_SINA_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+
+
+def _sina_http(url: str) -> str:
+    req = _urlreq.Request(url, headers={"User-Agent": _SINA_UA, "Referer": "https://finance.sina.com.cn"})
+    return _urlreq.urlopen(req, timeout=12).read().decode("gbk", "replace")
+
+
+def _sina_count(node: str) -> int:
+    try:
+        raw = _sina_http(
+            "https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/"
+            f"Market_Center.getHQNodeStockCount?node={node}"
+        )
+        m = _re.search(r"\d+", raw)
+        return int(m.group()) if m else 0
+    except Exception:
+        return 0
+
+
+def _sina_page(node: str, page: int, num: int = 100) -> list[dict]:
+    url = (
+        "https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/"
+        f"Market_Center.getHQNodeData?page={page}&num={num}&sort=symbol&asc=1&node={node}&_s_r_a=page"
+    )
+    try:
+        arr = json.loads(_sina_http(url))
+    except Exception:
+        return []
+    def _f(v):
+        try:
+            return float(v) if v not in (None, "") else None
+        except (TypeError, ValueError):
+            return None
+
+    out = []
+    for s in arr:
+        try:
+            sym = str(s.get("symbol", ""))
+            # Pre-market Sina returns trade=0; fall back to 昨收(settlement).
+            price = _f(s.get("trade"))
+            if not price:
+                price = _f(s.get("settlement"))
+            out.append({
+                "code":          str(s.get("code", "")).strip(),
+                "name":          s.get("name", ""),
+                "price":         price,
+                "change_pct":    float(s["changepercent"]) if s.get("changepercent") not in (None, "") else None,
+                "turnover_rate": float(s["turnoverratio"]) if s.get("turnoverratio") not in (None, "") else None,
+                "pe":            float(s["per"]) if s.get("per") not in (None, "") else None,
+                "pb":            float(s["pb"]) if s.get("pb") not in (None, "") else None,
+                "market_cap":    float(s["mktcap"]) * 10000 if s.get("mktcap") else None,
+                "exchange":      "SH" if sym.startswith("sh") else ("SZ" if sym.startswith("sz") else ""),
+            })
+        except Exception:
+            continue
+    return out
+
+
+async def _sina_all_stocks() -> list[dict]:
+    """All A-shares from Sina (cached 10 min)."""
+    ck = "market:all_stocks_sina"
+    cached = _db.get(ck, 600)
+    if cached:
+        return cached.get("stocks", [])
+    count = await asyncio.to_thread(_sina_count, "hs_a")
+    if not count:
+        stale = _db.get_stale(ck)
+        return stale.get("stocks", []) if stale else []
+    pages = (count + 99) // 100
+    sem = asyncio.Semaphore(8)
+
+    async def fetch(p: int) -> list[dict]:
+        async with sem:
+            return await asyncio.to_thread(_sina_page, "hs_a", p, 100)
+
+    results = await asyncio.gather(*[fetch(p) for p in range(1, pages + 1)])
+    stocks = [s for r in results for s in r if s.get("code")]
+    if stocks:
+        _db.set(ck, {"stocks": stocks}, 600, category="market")
+    return stocks
+
+
 @router.get("/all-stocks")
 async def get_all_stocks(
     sort_by: str = "code",  # code, name, change_pct, price
@@ -325,36 +414,18 @@ async def get_all_stocks(
     page_size: int = 100,
     filter_type: str | None = None,  # gainers, losers, volume_leaders
 ):
-    """Get all stocks with pagination, sorting and filtering.
-    
-    - filter_type: 'gainers' (top 20 by change_pct), 'losers' (bottom 20),
-                   'volume_leaders' (top 20 by volume)
-    """
-    from quantforge.data.storage.stock_meta_cache import _store, search_stocks, get_stocks_by_filter
-    
-    # Build base results list
+    """Get all A-shares (Sina source) with pagination, sorting and filtering."""
+    stocks = await _sina_all_stocks()
+
     if filter_type == "gainers":
-        # Top 20 by change_pct descending
-        stocks = get_stocks_by_filter(
-            filter_func=lambda code, info: info.get("change_pct") is not None,
-            limit=2000
-        )
+        stocks = [s for s in stocks if s.get("change_pct") is not None]
         stocks.sort(key=lambda x: x.get("change_pct") or 0, reverse=True)
         stocks = stocks[:50]
     elif filter_type == "losers":
-        # Bottom 20 by change_pct ascending
-        stocks = get_stocks_by_filter(
-            filter_func=lambda code, info: info.get("change_pct") is not None,
-            limit=2000
-        )
+        stocks = [s for s in stocks if s.get("change_pct") is not None]
         stocks.sort(key=lambda x: x.get("change_pct") or 0)
         stocks = stocks[:50]
-    elif filter_type == "volume_leaders":
-        # Will be handled when volume data is available
-        stocks = get_stocks_by_filter(limit=2000)
-    else:
-        stocks = get_stocks_by_filter(limit=10000)
-    
+
     # Apply sorting
     if sort_by == "name":
         stocks.sort(key=lambda x: x.get("name", ""), reverse=(order == "desc"))

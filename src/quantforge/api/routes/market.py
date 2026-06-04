@@ -406,6 +406,13 @@ async def _sina_all_stocks() -> list[dict]:
     return stocks
 
 
+@router.get("/datasource-status")
+async def datasource_status():
+    """当前生效的数据源（iFinD 优先，回退新浪/腾讯）。"""
+    from quantforge.data.feed import datasource
+    return datasource.status()
+
+
 @router.get("/all-stocks")
 async def get_all_stocks(
     sort_by: str = "code",  # code, name, change_pct, price

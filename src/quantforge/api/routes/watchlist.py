@@ -117,8 +117,8 @@ async def _fetch_quotes(codes: List[str]) -> dict:
     missing = [c for c in codes if c not in fresh]
     if missing:
         try:
-            from quantforge.data.feed.mootdx_feed import _tencent_quote
-            raw = await asyncio.to_thread(_tencent_quote, missing)
+            from quantforge.data.feed import datasource
+            raw = await asyncio.to_thread(datasource.quotes, missing)
             for code, q in raw.items():
                 fields = _quote_fields(q)
                 _quote_cache[code] = (now, fields)

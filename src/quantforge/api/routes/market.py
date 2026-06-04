@@ -413,6 +413,75 @@ async def datasource_status():
     return datasource.status()
 
 
+# ── 腾讯单股行情 + K线（gtimg，绕开被劫持的东财）────────────────────────────
+
+def _qq_prefixed(code: str) -> str:
+    c = code.strip().upper()
+    for p in ("SH", "SZ", "BJ"):
+        if c.startswith(p):
+            return p.lower() + c[2:]
+    if c.startswith(("6", "9")):
+        return "sh" + c
+    if c.startswith("8") or c.startswith("4"):
+        return "bj" + c
+    return "sz" + c
+
+
+def _tencent_kline(code: str, period: str = "day", count: int = 320) -> list[dict]:
+    """腾讯前复权 K 线。period ∈ {day, week, month}。"""
+    sym = _qq_prefixed(code)
+    period = period if period in ("day", "week", "month") else "day"
+    url = (
+        f"https://web.ifzq.gtimg.cn/appstock/app/fqkline/get"
+        f"?param={sym},{period},,,{int(count)},qfq"
+    )
+    req = _urlreq.Request(url, headers={"User-Agent": _SINA_UA, "Referer": "https://gu.qq.com/"})
+    raw = _urlreq.urlopen(req, timeout=12).read().decode("utf-8", "replace")
+    node = (json.loads(raw).get("data") or {}).get(sym) or {}
+    rows = node.get(f"qfq{period}") or node.get(period) or []
+    out = []
+    for r in rows:
+        # 腾讯顺序: [日期, 开, 收, 高, 低, 成交量(手)]
+        if len(r) < 6:
+            continue
+        try:
+            out.append({
+                "datetime": r[0],
+                "open": float(r[1]), "close": float(r[2]),
+                "high": float(r[3]), "low": float(r[4]),
+                "volume": float(r[5]),
+            })
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+@router.get("/quote/{code}")
+async def get_quote(code: str):
+    """单股实时行情(丰富指标)，经数据源门面(iFinD→腾讯)。"""
+    from quantforge.data.feed import datasource
+    code = code.strip().upper()
+    plain = code
+    for p in ("SH", "SZ", "BJ"):
+        if plain.startswith(p):
+            plain = plain[2:]
+    q = await asyncio.to_thread(datasource.quotes, [plain])
+    item = q.get(plain) or (next(iter(q.values())) if q else None)
+    if not item:
+        raise HTTPException(status_code=503, detail="行情获取失败")
+    return {"code": plain, **item}
+
+
+@router.get("/kline/{code}")
+async def get_kline(code: str, period: str = "day", count: int = 320):
+    """单股 K 线，经数据源门面(iFinD→腾讯)。"""
+    from quantforge.data.feed import datasource
+    bars = datasource.kline(code, "", "")  # iFinD 优先(目前返回 None)
+    if not bars:
+        bars = await asyncio.to_thread(_tencent_kline, code, period, count)
+    return {"code": code, "period": period, "count": len(bars), "bars": bars}
+
+
 @router.get("/all-stocks")
 async def get_all_stocks(
     sort_by: str = "code",  # code, name, change_pct, price

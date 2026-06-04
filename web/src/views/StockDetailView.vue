@@ -1,746 +1,248 @@
 <template>
-  <div class="stock-detail">
-    <!-- 顶部导航 -->
-    <header class="detail-header">
-      <div class="header-left">
-        <button class="back-btn" @click="$router.back()">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="15 18 9 12 15 6"></polyline>
-          </svg>
-        </button>
-        <div class="stock-info">
-          <h1>{{ stockName }}</h1>
-          <span class="stock-code">{{ symbol }}</span>
-        </div>
+  <div class="detail">
+    <!-- 顶栏 -->
+    <div class="detail-bar">
+      <button class="icon-btn" @click="$router.back()" title="返回">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <div class="title-wrap">
+        <span class="d-name">{{ q.name || '--' }}</span>
+        <span class="d-code mono">{{ plainCode }}</span>
+        <span v-if="q.change_pct != null" :class="['d-trend', cls]">{{ q.change_pct >= 0 ? '▲' : '▼' }}</span>
       </div>
-      <div class="header-actions">
-        <button class="download-btn" @click="downloadData" :disabled="downloading">
-          <svg v-if="downloading" class="spinner" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="23 4 23 10 17 10"></polyline>
-            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
-          </svg>
-          <span v-else>{{ hasData ? '更新数据' : '下载数据' }}</span>
-        </button>
-        <button class="toggle-watchlist" @click="toggleWatchlist">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" :fill="isInWatchlist ? '#e63946' : 'none'"></path>
-          </svg>
-        </button>
-      </div>
-    </header>
-
-    <!-- 价格卡片 -->
-    <div class="price-card">
-      <div class="price-main">
-        <span :class="['current-price', priceClass]">{{ currentPrice }}</span>
-        <span :class="['price-change', priceClass]">{{ priceChange }}</span>
-        <span :class="['price-change-pct', priceClass]">{{ priceChangePct }}</span>
-      </div>
-      <div class="price-grid">
-        <div class="price-item">
-          <span class="label">今开</span>
-          <span class="value">{{ openPrice }}</span>
-        </div>
-        <div class="price-item">
-          <span class="label">最高</span>
-          <span class="value">{{ highPrice }}</span>
-        </div>
-        <div class="price-item">
-          <span class="label">最低</span>
-          <span class="value">{{ lowPrice }}</span>
-        </div>
-        <div class="price-item">
-          <span class="label">昨收</span>
-          <span class="value">{{ prevClose }}</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- 周期选择器 -->
-    <div class="period-tabs">
-      <button 
-        v-for="period in periods" 
-        :key="period.key"
-        :class="['period-tab', activePeriod === period.key ? 'active' : '']"
-        @click="changePeriod(period.key)"
-      >
-        {{ period.label }}
+      <div class="bar-spacer"></div>
+      <button class="icon-btn" :class="{ starred: inList }" @click="toggleWatchlist" :title="inList ? '移出自选' : '加入自选'">
+        <svg width="18" height="18" viewBox="0 0 24 24" :fill="inList ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
       </button>
     </div>
 
-    <!-- K线图表 -->
-    <div class="chart-container">
-      <div v-if="loading" class="chart-loading">
-        <span class="spinner"></span>
-        <span>加载中...</span>
+    <!-- 行情 + 指标 -->
+    <div class="card hero">
+      <div class="hero-price">
+        <span :class="['big-price', cls]">{{ fmt(q.price) }}</span>
+        <div class="chg-col">
+          <span :class="['chg', cls]">{{ q.change_amt != null ? (q.change_amt >= 0 ? '+' : '') + q.change_amt.toFixed(2) : '--' }}</span>
+          <span :class="['chg-badge', cls]">{{ q.change_pct != null ? (q.change_pct >= 0 ? '+' : '') + q.change_pct.toFixed(2) + '%' : '--' }}</span>
+        </div>
       </div>
-      <div v-else-if="!hasData && !loading" class="chart-empty">
-        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path>
-          <polyline points="10 17 15 12 10 7"></polyline>
-          <line x1="15" y1="12" x2="3" y2="12"></line>
-        </svg>
-        <p>暂无历史数据</p>
-        <p class="hint">点击右上角"下载数据"获取历史行情</p>
+      <div class="metrics">
+        <div class="m"><span class="mk">今开</span><span :class="cmp(q.open)">{{ fmt(q.open) }}</span></div>
+        <div class="m"><span class="mk">最高</span><span :class="cmp(q.high)">{{ fmt(q.high) }}</span></div>
+        <div class="m"><span class="mk">最低</span><span :class="cmp(q.low)">{{ fmt(q.low) }}</span></div>
+        <div class="m"><span class="mk">昨收</span><span class="mv">{{ fmt(q.last_close) }}</span></div>
+        <div class="m"><span class="mk">成交额</span><span class="mv">{{ amtWan(q.amount_wan) }}</span></div>
+        <div class="m"><span class="mk">换手率</span><span class="mv">{{ pct(q.turnover_pct) }}</span></div>
+        <div class="m"><span class="mk">振幅</span><span class="mv">{{ pct(q.amplitude_pct) }}</span></div>
+        <div class="m"><span class="mk">量比</span><span class="mv">{{ fmt(q.vol_ratio) }}</span></div>
+        <div class="m"><span class="mk">市盈(TTM)</span><span class="mv">{{ fmt(q.pe_ttm) }}</span></div>
+        <div class="m"><span class="mk">市净率</span><span class="mv">{{ fmt(q.pb) }}</span></div>
+        <div class="m"><span class="mk">总市值</span><span class="mv">{{ capYi(q.mcap_yi) }}</span></div>
+        <div class="m"><span class="mk">流通市值</span><span class="mv">{{ capYi(q.float_mcap_yi) }}</span></div>
+        <div class="m"><span class="mk">涨停</span><span class="up">{{ fmt(q.limit_up) }}</span></div>
+        <div class="m"><span class="mk">跌停</span><span class="down">{{ fmt(q.limit_down) }}</span></div>
       </div>
-      <div v-else ref="chartRef" class="chart"></div>
     </div>
 
-    <!-- 成交量图表 -->
-    <div v-if="hasData" class="volume-container" ref="volumeRef"></div>
-
-    <!-- 底部导航 -->
-    <nav class="bottom-nav">
-      <button class="nav-tab" @click="$router.push('/')">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect>
-        </svg>
-        <span>首页</span>
-      </button>
-      <button class="nav-tab" @click="$router.push('/market-hub')">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line>
-        </svg>
-        <span>市场</span>
-      </button>
-      <button class="nav-tab active" @click="$router.push('/watchlist')">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path>
-        </svg>
-        <span>自选</span>
-      </button>
-      <button class="nav-tab" @click="$router.push('/live')">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect width="18" height="18" x="3" y="4" rx="2"></rect><line x1="3" x2="21" y1="10" y2="10"></line>
-        </svg>
-        <span>交易</span>
-      </button>
-      <button class="nav-tab" @click="$router.push('/news')">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"></path><path d="M18 14h-8"></path><path d="M15 18h-5"></path><path d="M10 6h8v4h-8V6Z"></path>
-        </svg>
-        <span>资讯</span>
-      </button>
-    </nav>
+    <!-- K线 -->
+    <div class="card kline">
+      <div class="kline-head">
+        <span class="text-1 fw-600">K线走势</span>
+        <div class="period-tabs">
+          <button v-for="p in periods" :key="p.key"
+            :class="['ptab', klinePeriod === p.key ? 'active' : '']"
+            @click="changePeriod(p.key)">{{ p.label }}</button>
+        </div>
+      </div>
+      <div v-if="klineLoading" class="kline-loading"><span class="spinner spinner-sm"></span> 加载K线...</div>
+      <div v-else-if="!bars.length" class="kline-empty">暂无K线数据</div>
+      <div v-else ref="chartRef" class="chart-box"></div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import * as echarts from 'echarts'
 import axios from 'axios'
 import { useWatchlistStore } from '../stores/watchlist'
 
 const route = useRoute()
-const router = useRouter()
 const watchlistStore = useWatchlistStore()
 
-const symbol = computed(() => route.query.symbol || '000001')
-const stockName = ref('--')
-const loading = ref(false)
-const downloading = ref(false)
-const hasData = ref(false)
-const activePeriod = ref('1y')
+const plainCode = computed(() => {
+  let c = String(route.query.symbol || '000001').toUpperCase()
+  return c.replace(/^(SH|SZ|BJ)/, '').replace(/\.(SH|SZ|BJ)$/, '')
+})
+
+const q = reactive({})
+const bars = ref([])
+const klinePeriod = ref('day')
+const klineLoading = ref(false)
 const chartRef = ref(null)
-const volumeRef = ref(null)
 let chartInstance = null
-let volumeChartInstance = null
 
 const periods = [
-  { key: '1d', label: '日', days: 1 },
-  { key: '1w', label: '周', days: 7 },
-  { key: '1m', label: '月', days: 30 },
-  { key: '3m', label: '季', days: 90 },
-  { key: '1y', label: '年', days: 365 },
-  { key: 'all', label: '全部', days: 3650 },
+  { key: 'day', label: '日K', count: 250 },
+  { key: 'week', label: '周K', count: 250 },
+  { key: 'month', label: '月K', count: 180 },
 ]
 
-const isInWatchlist = computed(() => watchlistStore.isInWatchlist(symbol.value))
+const inList = computed(() => watchlistStore.isInWatchlist(plainCode.value))
+const cls = computed(() => (q.change_pct == null ? '' : q.change_pct >= 0 ? 'up' : 'down'))
 
-// 模拟实时数据
-const currentPrice = ref('--')
-const priceChange = ref('--')
-const priceChangePct = ref('--')
-const openPrice = ref('--')
-const highPrice = ref('--')
-const lowPrice = ref('--')
-const prevClose = ref('--')
-const priceClass = ref('')
+function cmp(v) {
+  if (v == null || q.last_close == null) return 'mv'
+  return v > q.last_close ? 'up' : v < q.last_close ? 'down' : 'mv'
+}
+function fmt(v) { return v != null ? Number(v).toFixed(2) : '--' }
+function pct(v) { return v != null ? Number(v).toFixed(2) + '%' : '--' }
+function amtWan(v) {
+  if (!v) return '--'
+  const yuan = v * 10000
+  if (yuan >= 1e8) return (yuan / 1e8).toFixed(2) + '亿'
+  return (v).toFixed(0) + '万'
+}
+function capYi(v) {
+  if (!v) return '--'
+  if (v >= 10000) return (v / 10000).toFixed(2) + '万亿'
+  return v.toFixed(0) + '亿'
+}
 
-const chartData = ref([])
-
-const loadStockMeta = async () => {
+async function loadQuote() {
   try {
-    const response = await axios.get(`/api/stock-analysis/${symbol.value}/overview`)
-    if (response.data) {
-      const data = response.data
-      stockName.value = data.name || '--'
-      if (data.price !== undefined) {
-        currentPrice.value = data.price.toFixed(2)
-      }
-      if (data.change_pct !== undefined) {
-        const pct = parseFloat(data.change_pct)
-        priceClass.value = pct >= 0 ? 'up' : 'down'
-        priceChangePct.value = (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%'
-        if (data.change !== undefined) {
-          priceChange.value = (data.change >= 0 ? '+' : '') + data.change.toFixed(2)
-        }
-      }
-      if (data.high !== undefined) {
-        highPrice.value = data.high.toFixed(2)
-      }
-      if (data.low !== undefined) {
-        lowPrice.value = data.low.toFixed(2)
-      }
-      if (data.open !== undefined) {
-        openPrice.value = data.open.toFixed(2)
-      }
-      if (data.previous_close !== undefined) {
-        prevClose.value = data.previous_close.toFixed(2)
-      }
-    }
-  } catch (error) {
-    console.error('Failed to load stock meta:', error)
+    const res = await axios.get(`/api/market/quote/${plainCode.value}`)
+    Object.assign(q, res.data)
+  } catch (e) {
+    console.error('quote load failed', e)
   }
 }
 
-const loadChartData = async () => {
-  loading.value = true
+async function loadKline() {
+  klineLoading.value = true
   try {
-    // 先尝试本地数据
-    const period = periods.find(p => p.key === activePeriod.value)
-    const endDate = new Date()
-    const startDate = new Date(endDate.getTime() - period.days * 24 * 60 * 60 * 1000)
-    
-    try {
-      const response = await axios.get('/api/market/history', {
-        params: {
-          symbol: symbol.value,
-          start: startDate.toISOString().split('T')[0],
-          end: endDate.toISOString().split('T')[0],
-        }
-      })
-      
-      if (response.data && response.data.length > 0) {
-        chartData.value = response.data
-        hasData.value = true
-        renderChart()
-      } else {
-        hasData.value = false
-      }
-    } catch (error) {
-      console.log('Local data not available, will prompt for download')
-      hasData.value = false
-    }
-  } catch (error) {
-    console.error('Failed to load chart data:', error)
-    hasData.value = false
-  } finally {
-    loading.value = false
-  }
-}
-
-const downloadData = async () => {
-  downloading.value = true
-  try {
-    const endDate = new Date()
-    const startDate = new Date(endDate.getTime() - 3650 * 24 * 60 * 60 * 1000)
-    
-    await axios.post('/api/market/download', {
-      symbol: symbol.value,
-      start: startDate.toISOString().split('T')[0],
-      end: endDate.toISOString().split('T')[0],
-      interval: '1d',
+    const p = periods.find(x => x.key === klinePeriod.value)
+    const res = await axios.get(`/api/market/kline/${plainCode.value}`, {
+      params: { period: klinePeriod.value, count: p.count },
     })
-    
-    await loadChartData()
-  } catch (error) {
-    console.error('Failed to download data:', error)
-    alert('下载数据失败: ' + (error.response?.data?.detail || error.message))
+    bars.value = res.data.bars || []
+    if (bars.value.length) renderChart()
+  } catch (e) {
+    console.error('kline load failed', e)
+    bars.value = []
   } finally {
-    downloading.value = false
+    klineLoading.value = false
   }
 }
 
-const toggleWatchlist = () => {
-  if (isInWatchlist.value) {
-    if (confirm('确定要从自选股中移除吗?')) {
-      watchlistStore.removeFromWatchlist(symbol.value)
-    }
-  } else {
-    watchlistStore.addToWatchlist({
-      code: symbol.value,
-      name: stockName.value,
-    })
-  }
+function changePeriod(key) {
+  klinePeriod.value = key
+  loadKline()
 }
 
-const changePeriod = (key) => {
-  activePeriod.value = key
-  loadChartData()
+function toggleWatchlist() {
+  if (inList.value) watchlistStore.removeFromWatchlist(plainCode.value)
+  else watchlistStore.addToWatchlist({ code: plainCode.value, name: q.name })
 }
 
-const renderChart = () => {
-  if (!chartRef.value || chartData.value.length === 0) return
-  
+function renderChart() {
   nextTick(() => {
-    if (chartInstance) {
-      chartInstance.dispose()
-    }
-    
+    if (!chartRef.value) return
+    if (chartInstance) chartInstance.dispose()
     chartInstance = echarts.init(chartRef.value)
-    
-    const dates = chartData.value.map(d => d.datetime || d.date)
-    const values = chartData.value.map(d => [
-      parseFloat(d.open),
-      parseFloat(d.close),
-      parseFloat(d.low),
-      parseFloat(d.high),
-    ])
-    const volumes = chartData.value.map(d => parseFloat(d.volume) || 0)
-    
-    const upColor = '#ef4444'
-    const downColor = '#22c55e'
-    
-    const option = {
+    const dates = bars.value.map(b => b.datetime)
+    const kv = bars.value.map(b => [b.open, b.close, b.low, b.high])
+    const vol = bars.value.map(b => b.volume || 0)
+    const up = '#f5394c', down = '#20b26c'
+    chartInstance.setOption({
       backgroundColor: 'transparent',
       animation: false,
+      axisPointer: { link: [{ xAxisIndex: 'all' }] },
+      tooltip: { trigger: 'axis', axisPointer: { type: 'cross' }, backgroundColor: 'rgba(14,22,36,0.95)', borderColor: '#1e2e44', textStyle: { color: '#e2eaf4', fontSize: 11 } },
       grid: [
-        {
-          left: '10%',
-          right: '8%',
-          top: '8%',
-          height: '50%',
-        },
-        {
-          left: '10%',
-          right: '8%',
-          top: '63%',
-          height: '16%',
-        },
+        { left: 56, right: 16, top: 12, height: '62%' },
+        { left: 56, right: 16, top: '74%', height: '18%' },
       ],
       xAxis: [
-        {
-          type: 'category',
-          data: dates,
-          scale: true,
-          boundaryGap: false,
-          axisLine: { lineStyle: { color: '#333' } },
-          axisLabel: { show: false },
-          axisTick: { show: false },
-          splitLine: { show: false },
-          min: 'dataMin',
-          max: 'dataMax',
-        },
-        {
-          type: 'category',
-          gridIndex: 1,
-          data: dates,
-          scale: true,
-          boundaryGap: false,
-          axisLine: { lineStyle: { color: '#333' } },
-          axisLabel: {
-            color: '#666',
-            fontSize: 10,
-          },
-          axisTick: { show: false },
-          splitLine: { show: false },
-        },
+        { type: 'category', data: dates, boundaryGap: true, axisLine: { lineStyle: { color: '#1e2e44' } }, axisLabel: { show: false }, axisTick: { show: false } },
+        { type: 'category', gridIndex: 1, data: dates, axisLine: { lineStyle: { color: '#1e2e44' } }, axisLabel: { color: '#344d64', fontSize: 10 }, axisTick: { show: false } },
       ],
       yAxis: [
-        {
-          scale: true,
-          splitNumber: 5,
-          axisLine: { show: false },
-          axisTick: { show: false },
-          axisLabel: {
-            color: '#666',
-            fontSize: 10,
-          },
-          splitLine: {
-            lineStyle: { color: '#222', type: 'dashed' },
-          },
-        },
-        {
-          scale: true,
-          gridIndex: 1,
-          splitNumber: 2,
-          axisLine: { show: false },
-          axisTick: { show: false },
-          axisLabel: { show: false },
-          splitLine: {
-            lineStyle: { color: '#222', type: 'dashed' },
-          },
-        },
+        { scale: true, splitNumber: 4, axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: '#6a859e', fontSize: 10 }, splitLine: { lineStyle: { color: '#162030' } } },
+        { gridIndex: 1, scale: true, splitNumber: 2, axisLine: { show: false }, axisTick: { show: false }, axisLabel: { show: false }, splitLine: { show: false } },
       ],
-      dataZoom: [
-        {
-          type: 'inside',
-          xAxisIndex: [0, 1],
-          start: 0,
-          end: 100,
-        },
-      ],
+      dataZoom: [{ type: 'inside', xAxisIndex: [0, 1], start: 60, end: 100 }],
       series: [
-        {
-          type: 'candlestick',
-          name: 'K线',
-          data: values,
-          itemStyle: {
-            color: upColor,
-            color0: downColor,
-            borderColor: upColor,
-            borderColor0: downColor,
-          },
-        },
-        {
-          name: '成交量',
-          type: 'bar',
-          xAxisIndex: 1,
-          yAxisIndex: 1,
-          data: volumes.map((v, i) => {
-            const isUp = values[i][1] >= values[i][0]
-            return {
-              value: v,
-              itemStyle: {
-                color: isUp ? upColor : downColor,
-                opacity: 0.8,
-              },
-            }
-          }),
-        },
+        { type: 'candlestick', data: kv, itemStyle: { color: up, color0: down, borderColor: up, borderColor0: down } },
+        { type: 'bar', xAxisIndex: 1, yAxisIndex: 1, data: vol.map((v, i) => ({ value: v, itemStyle: { color: kv[i][1] >= kv[i][0] ? up : down, opacity: 0.55 } })) },
       ],
-    }
-    
-    chartInstance.setOption(option)
-    
-    window.addEventListener('resize', handleResize)
+    })
   })
 }
 
-const handleResize = () => {
-  if (chartInstance) {
-    chartInstance.resize()
-  }
-}
+function onResize() { if (chartInstance) chartInstance.resize() }
 
-watch(() => symbol.value, () => {
-  loadStockMeta()
-  loadChartData()
-})
+watch(plainCode, () => { loadQuote(); loadKline() })
 
 onMounted(() => {
-  loadStockMeta()
-  loadChartData()
+  loadQuote()
+  loadKline()
+  window.addEventListener('resize', onResize)
 })
-
 onUnmounted(() => {
-  window.removeEventListener('resize', handleResize)
-  if (chartInstance) {
-    chartInstance.dispose()
-  }
+  window.removeEventListener('resize', onResize)
+  if (chartInstance) chartInstance.dispose()
 })
 </script>
 
 <style scoped>
-.stock-detail {
-  min-height: 100vh;
-  background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
-  padding-bottom: 70px;
-  display: flex;
-  flex-direction: column;
-}
+.detail { padding: 20px 24px; display: flex; flex-direction: column; gap: 14px; }
 
-.detail-header {
-  background: linear-gradient(135deg, #e63946 0%, #d62828 100%);
-  padding: 12px 16px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
+/* 顶栏 */
+.detail-bar { display: flex; align-items: center; gap: 12px; }
+.icon-btn { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 1px solid var(--border); background: var(--bg-elevated); color: var(--text-2); border-radius: var(--radius-md); cursor: pointer; transition: all 0.15s; }
+.icon-btn:hover { color: var(--text-1); border-color: var(--border-light); }
+.icon-btn.starred { color: #f5b301; border-color: rgba(245,179,1,0.4); }
+.title-wrap { display: flex; align-items: baseline; gap: 10px; }
+.d-name { font-size: 20px; font-weight: 700; color: var(--text-1); }
+.d-code { font-size: 13px; color: var(--text-3); }
+.d-trend.up { color: var(--up); } .d-trend.down { color: var(--down); }
+.bar-spacer { flex: 1; }
 
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
+/* 卡片 */
+.card { background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-xl); padding: 16px; }
+.fw-600 { font-weight: 600; }
 
-.back-btn {
-  background: rgba(255, 255, 255, 0.15);
-  border: none;
-  border-radius: 8px;
-  padding: 6px;
-  color: white;
-  cursor: pointer;
-}
+/* 行情 hero */
+.hero-price { display: flex; align-items: flex-end; gap: 16px; margin-bottom: 16px; }
+.big-price { font-size: 40px; font-weight: 700; font-family: var(--font-mono); line-height: 1; color: var(--text-1); }
+.big-price.up { color: var(--up); } .big-price.down { color: var(--down); }
+.chg-col { display: flex; flex-direction: column; gap: 4px; padding-bottom: 4px; }
+.chg { font-size: 15px; font-weight: 600; font-family: var(--font-mono); }
+.chg.up { color: var(--up); } .chg.down { color: var(--down); }
+.chg-badge { font-size: 14px; font-weight: 700; font-family: var(--font-mono); padding: 2px 8px; border-radius: 5px; text-align: center; }
+.chg-badge.up { color: var(--up); background: rgba(245,57,76,0.14); }
+.chg-badge.down { color: var(--down); background: rgba(32,178,108,0.14); }
 
-.stock-info h1 {
-  font-size: 18px;
-  font-weight: 700;
-  color: white;
-  margin: 0;
-}
+.metrics { display: grid; grid-template-columns: repeat(7, 1fr); gap: 12px 16px; }
+.m { display: flex; flex-direction: column; gap: 3px; }
+.mk { font-size: 11px; color: var(--text-3); }
+.m > span:last-child, .mv { font-size: 14px; font-family: var(--font-mono); color: var(--text-1); }
+.m .up { color: var(--up); } .m .down { color: var(--down); }
 
-.stock-code {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.8);
-  margin-left: 8px;
-}
+/* K线 */
+.kline-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.period-tabs { display: flex; gap: 4px; background: var(--bg-base); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 3px; }
+.ptab { padding: 5px 14px; border: none; background: transparent; color: var(--text-3); font-size: 12px; border-radius: calc(var(--radius-md) - 2px); cursor: pointer; transition: all 0.15s; }
+.ptab:hover { color: var(--text-1); }
+.ptab.active { background: var(--bg-elevated); color: var(--accent); }
+.chart-box { width: 100%; height: 420px; }
+.kline-loading, .kline-empty { display: flex; align-items: center; justify-content: center; gap: 10px; height: 420px; color: var(--text-3); font-size: 13px; }
 
-.header-actions {
-  display: flex;
-  gap: 8px;
+@media (max-width: 900px) {
+  .metrics { grid-template-columns: repeat(4, 1fr); }
 }
-
-.download-btn {
-  background: rgba(255, 255, 255, 0.15);
-  border: none;
-  border-radius: 8px;
-  padding: 8px 12px;
-  color: white;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.download-btn:disabled {
-  opacity: 0.6;
-}
-
-.toggle-watchlist {
-  background: rgba(255, 255, 255, 0.15);
-  border: none;
-  border-radius: 8px;
-  padding: 6px;
-  color: white;
-  cursor: pointer;
-}
-
-.spinner {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.price-card {
-  background: rgba(255, 255, 255, 0.05);
-  margin: 16px;
-  padding: 16px;
-  border-radius: 12px;
-}
-
-.price-main {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.current-price {
-  font-size: 28px;
-  font-weight: 700;
-  font-family: 'JetBrains Mono', monospace;
-}
-
-.current-price.up {
-  color: #ef4444;
-}
-
-.current-price.down {
-  color: #22c55e;
-}
-
-.price-change {
-  font-size: 16px;
-  font-weight: 600;
-  font-family: 'JetBrains Mono', monospace;
-}
-
-.price-change.up,
-.price-change-pct.up {
-  color: #ef4444;
-  background: rgba(239, 68, 68, 0.15);
-  padding: 2px 8px;
-  border-radius: 4px;
-}
-
-.price-change.down,
-.price-change-pct.down {
-  color: #22c55e;
-  background: rgba(34, 197, 94, 0.15);
-  padding: 2px 8px;
-  border-radius: 4px;
-}
-
-.price-change-pct {
-  font-size: 16px;
-  font-weight: 600;
-  font-family: 'JetBrains Mono', monospace;
-}
-
-.price-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-}
-
-.price-item {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.price-item .label {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.5);
-}
-
-.price-item .value {
-  font-size: 14px;
-  color: white;
-  font-family: 'JetBrains Mono', monospace;
-}
-
-.period-tabs {
-  display: flex;
-  gap: 4px;
-  margin: 0 16px 12px;
-  background: rgba(255, 255, 255, 0.05);
-  padding: 4px;
-  border-radius: 8px;
-}
-
-.period-tab {
-  flex: 1;
-  padding: 8px 12px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.6);
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.period-tab.active {
-  background: rgba(255, 255, 255, 0.15);
-  color: white;
-}
-
-.chart-container {
-  flex: 1;
-  margin: 0 16px 8px;
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: 8px;
-  min-height: 300px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.chart {
-  width: 100%;
-  height: 300px;
-}
-
-.chart-loading {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  color: rgba(255, 255, 255, 0.5);
-}
-
-.chart-loading .spinner {
-  width: 24px;
-  height: 24px;
-  border: 2px solid rgba(255, 255, 255, 0.2);
-  border-top-color: #e63946;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-.chart-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  color: rgba(255, 255, 255, 0.4);
-  text-align: center;
-  padding: 40px 20px;
-}
-
-.chart-empty p {
-  margin: 0;
-  font-size: 14px;
-}
-
-.chart-empty .hint {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.3);
-}
-
-.volume-container {
-  margin: 0 16px 16px;
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: 8px;
-  height: 100px;
-}
-
-.bottom-nav {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  display: flex;
-  background: rgba(26, 26, 46, 0.95);
-  backdrop-filter: blur(10px);
-  padding: 8px 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  z-index: 50;
-}
-
-.nav-tab {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  background: none;
-  border: none;
-  color: rgba(255, 255, 255, 0.5);
-  cursor: pointer;
-  padding: 4px 0;
-}
-
-.nav-tab:hover {
-  color: rgba(255, 255, 255, 0.7);
-}
-
-.nav-tab.active {
-  color: #e63946;
-}
-
-.nav-tab span {
-  font-size: 10px;
-}
-
-@media (min-width: 768px) {
-  .stock-detail {
-    max-width: 600px;
-    margin: 0 auto;
-    box-shadow: 0 0 30px rgba(0, 0, 0, 0.3);
-  }
-  
-  .bottom-nav {
-    display: none;
-  }
+@media (max-width: 560px) {
+  .metrics { grid-template-columns: repeat(2, 1fr); }
 }
 </style>

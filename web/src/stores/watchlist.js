@@ -24,28 +24,19 @@ export const useWatchlistStore = defineStore('watchlist', () => {
 
   const auth = useAuthStore()
 
-  // ── 验证记录的本地存储（按账户隔离）─────────────────────────────────────
-  function _verifyKey() {
-    const uid = auth.user?.id || 'anon'
-    return `quantforge-watchlist-verifications:${uid}`
-  }
-
-  function loadFromStorage() {
+  // ── 验证记录（服务端按账户存储）─────────────────────────────────────────
+  async function loadVerifications() {
+    if (!auth.token) { watchlistVerifications.value = []; return }
     try {
-      const saved = localStorage.getItem(_verifyKey())
-      watchlistVerifications.value = saved ? JSON.parse(saved) : []
+      const res = await axios.get('/api/watchlist/verifications')
+      watchlistVerifications.value = res.data || []
     } catch (e) {
-      watchlistVerifications.value = []
+      if (e.response?.status !== 401) console.error('Failed to load verifications:', e)
     }
   }
-
-  function saveToStorage() {
-    try {
-      localStorage.setItem(_verifyKey(), JSON.stringify(watchlistVerifications.value))
-    } catch (e) {
-      console.error('Failed to save verifications:', e)
-    }
-  }
+  // 兼容旧的对外名（不再用 localStorage）
+  function loadFromStorage() { loadVerifications() }
+  function saveToStorage() {}
 
   // ── 自选股（服务端 API）────────────────────────────────────────────────
   async function loadWatchlist() {
@@ -136,16 +127,30 @@ export const useWatchlistStore = defineStore('watchlist', () => {
   }
 
   // ── 验证记录 ────────────────────────────────────────────────────────────
-  function addVerification(verification) {
-    watchlistVerifications.value.unshift({
-      ...verification, id: Date.now(), createdAt: new Date().toISOString(),
-    })
-    saveToStorage()
+  async function addVerification(verification) {
+    try {
+      const res = await axios.post('/api/watchlist/verifications', {
+        periodDays: verification.periodDays,
+        startDate: verification.startDate,
+        endDate: verification.endDate,
+        totalReturn: verification.totalReturn,
+        results: verification.results || [],
+      })
+      watchlistVerifications.value.unshift(res.data)
+      return res.data
+    } catch (e) {
+      console.error('Failed to save verification:', e)
+      return null
+    }
   }
 
-  function removeVerification(id) {
+  async function removeVerification(id) {
+    try {
+      await axios.delete(`/api/watchlist/verifications/${id}`)
+    } catch (e) {
+      if (e.response?.status !== 404) { console.error('Failed to remove verification:', e); return }
+    }
     watchlistVerifications.value = watchlistVerifications.value.filter(v => v.id !== id)
-    saveToStorage()
   }
 
   async function fetchStockInfo(code) {
@@ -190,8 +195,8 @@ export const useWatchlistStore = defineStore('watchlist', () => {
           ? (results.reduce((sum, r) => sum + parseFloat(r.changePercent), 0) / results.length).toFixed(2)
           : 0,
       }
-      addVerification(verification)
-      return verification
+      const saved = await addVerification(verification)
+      return saved || verification
     } catch (e) {
       error.value = e.message
       throw e
@@ -256,18 +261,18 @@ export const useWatchlistStore = defineStore('watchlist', () => {
 
   // 账户切换（登录/登出/换号）时重载本账户数据
   watch(() => auth.user?.id, () => {
-    loadFromStorage()
+    loadVerifications()
     loadWatchlist()
   })
 
   // 初始化：加载本账户验证记录 + 自选股
-  loadFromStorage()
+  loadVerifications()
   loadWatchlist()
 
   return {
     watchlist, watchlistVerifications, realtimeData, miniChartData, shIndex,
     loading, searching, refreshing, error, searchResults, loaded,
-    loadWatchlist, searchStock, addToWatchlist, removeFromWatchlist, isInWatchlist,
+    loadWatchlist, loadVerifications, searchStock, addToWatchlist, removeFromWatchlist, isInWatchlist,
     addVerification, removeVerification, fetchStockInfo, verifyWatchlist,
     fetchShIndex, fetchRealtimeData, fetchMiniChartData, fetchAllMiniChartData,
     getStockInfo, refreshAll, loadFromStorage, saveToStorage,

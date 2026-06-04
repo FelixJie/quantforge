@@ -184,6 +184,19 @@ CREATE TABLE IF NOT EXISTS watchlist (
     PRIMARY KEY (user_id, code)
 );
 CREATE INDEX IF NOT EXISTS idx_watchlist_user ON watchlist(user_id);
+
+-- Per-account watchlist verification snapshots
+CREATE TABLE IF NOT EXISTS watchlist_verifications (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id      TEXT NOT NULL,
+    period_days  INTEGER,
+    start_date   TEXT,
+    end_date     TEXT,
+    total_return REAL,
+    results      TEXT,                 -- JSON array
+    created_at   TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_wlverif_user ON watchlist_verifications(user_id);
 """
 
 
@@ -786,6 +799,70 @@ def watchlist_clear(user_id: str) -> int:
         except Exception as exc:
             logger.debug(f"db_cache.watchlist_clear failed: {exc}")
             return 0
+
+
+def _row_to_verif(row: sqlite3.Row) -> dict:
+    try:
+        results = json.loads(row["results"]) if row["results"] else []
+    except Exception:
+        results = []
+    return {
+        "id": row["id"],
+        "period_days": row["period_days"],
+        "start_date": row["start_date"],
+        "end_date": row["end_date"],
+        "total_return": row["total_return"],
+        "results": results,
+        "created_at": row["created_at"],
+    }
+
+
+def add_watch_verification(user_id: str, period_days, start_date, end_date,
+                           total_return, results) -> dict | None:
+    created = _now_iso()
+    with _write_lock:
+        try:
+            cur = _conn().execute(
+                "INSERT INTO watchlist_verifications"
+                "(user_id, period_days, start_date, end_date, total_return, results, created_at) "
+                "VALUES(?, ?, ?, ?, ?, ?, ?)",
+                (user_id, period_days, start_date, end_date,
+                 float(total_return or 0),
+                 json.dumps(results or [], ensure_ascii=False), created),
+            )
+            vid = cur.lastrowid
+        except Exception as exc:
+            logger.warning(f"db_cache.add_watch_verification failed: {exc}")
+            return None
+    row = _conn().execute(
+        "SELECT * FROM watchlist_verifications WHERE id=?", (vid,)
+    ).fetchone()
+    return _row_to_verif(row) if row else None
+
+
+def get_watch_verifications(user_id: str) -> list[dict]:
+    try:
+        rows = _conn().execute(
+            "SELECT * FROM watchlist_verifications WHERE user_id=? ORDER BY id DESC",
+            (user_id,),
+        ).fetchall()
+    except Exception as exc:
+        logger.debug(f"db_cache.get_watch_verifications failed: {exc}")
+        return []
+    return [_row_to_verif(r) for r in rows]
+
+
+def delete_watch_verification(user_id: str, vid: int) -> bool:
+    with _write_lock:
+        try:
+            cur = _conn().execute(
+                "DELETE FROM watchlist_verifications WHERE user_id=? AND id=?",
+                (user_id, vid),
+            )
+            return (cur.rowcount or 0) > 0
+        except Exception as exc:
+            logger.debug(f"db_cache.delete_watch_verification failed: {exc}")
+            return False
 
 
 # ---------------------------------------------------------------------------

@@ -53,6 +53,26 @@ class WatchlistUpdateNotes(BaseModel):
     notes: str
 
 
+class VerificationCreate(BaseModel):
+    periodDays: int = 0
+    startDate: str = ""
+    endDate: str = ""
+    totalReturn: float = 0
+    results: List[dict] = Field(default_factory=list)
+
+
+def _verif_out(r: dict) -> dict:
+    return {
+        "id": r["id"],
+        "periodDays": r["period_days"],
+        "startDate": r["start_date"],
+        "endDate": r["end_date"],
+        "totalReturn": r["total_return"],
+        "results": r["results"],
+        "createdAt": r["created_at"],
+    }
+
+
 # ── Quote enrichment (Tencent — works behind proxy) ──────────────────────────
 
 def _quote_fields(q: dict) -> dict:
@@ -203,3 +223,38 @@ async def clear_watchlist(current_user: dict = Depends(get_current_user)):
     """Remove all stocks from the user's watchlist."""
     n = db_cache.watchlist_clear(current_user["id"])
     return {"status": "cleared", "count": n}
+
+
+# ── Verification records (per-account) ───────────────────────────────────────
+
+@router.get("/verifications")
+async def list_verifications(current_user: dict = Depends(get_current_user)):
+    """List the current user's saved watchlist-verification snapshots."""
+    rows = db_cache.get_watch_verifications(current_user["id"])
+    return [_verif_out(r) for r in rows]
+
+
+@router.post("/verifications", status_code=status.HTTP_201_CREATED)
+async def create_verification(
+    req: VerificationCreate,
+    current_user: dict = Depends(get_current_user),
+):
+    """Persist a verification snapshot (computed client-side) for this account."""
+    saved = db_cache.add_watch_verification(
+        current_user["id"], req.periodDays, req.startDate, req.endDate,
+        req.totalReturn, req.results,
+    )
+    if saved is None:
+        raise HTTPException(status_code=500, detail="保存验证记录失败")
+    return _verif_out(saved)
+
+
+@router.delete("/verifications/{vid}")
+async def delete_verification(
+    vid: int,
+    current_user: dict = Depends(get_current_user),
+):
+    """Delete one verification snapshot by id."""
+    if not db_cache.delete_watch_verification(current_user["id"], vid):
+        raise HTTPException(status_code=404, detail="未找到该验证记录")
+    return {"status": "removed", "id": vid}

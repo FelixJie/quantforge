@@ -387,10 +387,8 @@ async function removeTag(stock, t) {
 }
 
 onMounted(async () => {
-  // 自动加载全部股票数据
-  await loadAllStocks()
+  // 进入只加载自选股（快）；全部股票切到该 tab 时再懒加载
   await loadWatchlistData()
-  // 自选股行情自动刷新（15s，页面隐藏时自动暂停）
   watchlistStore.startAutoRefresh(15000)
 })
 

@@ -131,48 +131,31 @@ _QUOTE_MAP = [
 
 
 def quote(codes: list[str]) -> dict | None:
-    """批量实时行情，返回 {code: {price, change_pct, pe_ttm, pb, ...}}。
+    """批量实时行情。
 
-    返回 None 表示 iFinD 不可用或调用失败，调用方应回退。
+    该账号经测试 THS_RealtimeQuotes/THS_BD 返回 -205/-209（疑似未开通实时/基础
+    数据接口权限），故此处不调用 iFinD，直接返回 None 让调用方回退到腾讯，
+    避免每次行情都触发缓慢且会失败的 iFinD 调用。待账号权限/指标确认后再启用。
     """
-    if not available() or not codes:
-        return None
-    THS = _state["ths"]
-    ths_codes = ",".join(_ths_code(c) for c in codes)
-    try:
-        resp = THS.THS_BD(ths_codes, _QUOTE_INDICATORS, "")
-        rows = _bd_rows(resp)
-        if not rows:
-            return None
-        out: dict[str, dict] = {}
-        for r in rows:
-            code = _plain_code(r.get("thscode") or r.get("code") or "")
-            if not code:
-                continue
-            vals = r.get("values") or []
-            d: dict = {}
-            for (field, caster), v in zip(_QUOTE_MAP, vals):
-                try:
-                    d[field] = caster(v) if v not in (None, "", "--") else None
-                except (TypeError, ValueError):
-                    d[field] = None
-            d.setdefault("name", r.get("name", ""))
-            out[code] = d
-        return out or None
-    except Exception as e:
-        logger.debug(f"iFinD quote failed: {e}")
-        return None
+    return None
 
 
-def kline(code: str, start: str, end: str) -> list[dict] | None:
-    """日 K 线，返回 [{datetime, open, high, low, close, volume}]，None 表示回退。"""
+def kline(code: str, start: str = "", end: str = "", count: int = 320) -> list[dict] | None:
+    """日 K 线 (THS_HistoryQuotes，已验证可用)。
+
+    返回 [{datetime, open, high, low, close, volume}]；None 表示回退。
+    """
     if not available():
         return None
     THS = _state["ths"]
     try:
-        resp = THS.THS_HQ(_ths_code(code), "open;high;low;close;volume", "", start, end)
-        series = _hq_series(resp)
-        return series or None
+        import datetime as _dt
+        if not end:
+            end = _dt.date.today().strftime("%Y-%m-%d")
+        if not start:
+            start = (_dt.date.today() - _dt.timedelta(days=max(count, 60) * 2)).strftime("%Y-%m-%d")
+        resp = THS.THS_HistoryQuotes(_ths_code(code), "open,high,low,close,volume", "", start, end)
+        return _hq_series(resp) or None
     except Exception as e:
         logger.debug(f"iFinD kline failed for {code}: {e}")
         return None

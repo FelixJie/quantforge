@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "A modern quantitative trading system for A-share market"
 requires-python = ">=3.12"
 dependencies = [
-    "pydantic>=2.0",
+    "pydantic[email]>=2.0",
     "pydantic-settings>=2.0",
     "pyyaml>=6.0",
     "numpy>=1.26",
@@ -22,6 +22,7 @@ ml = [
     "scikit-learn>=1.3",
     "lightgbm>=4.0",
     "torch>=2.1",
+    "scipy>=1.11",
 ]
 api = [
     "fastapi>=0.109",
@@ -32,8 +33,12 @@ api = [
     "bcrypt>=4.0",
     "python-jose[cryptography]>=3.3",
     "mootdx>=0.10",
+    "efinance>=0.5",
     "requests>=2.30",
     "stockstats>=0.6",
+    "pdfplumber>=0.10",
+    "PyMuPDF>=1.23",
+    "beautifulsoup4>=4.12",
 ]
 dev = [
     "pytest>=7.4",

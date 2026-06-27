@@ -154,6 +154,29 @@ _BUILTIN_STRATEGIES: dict[str, dict] = {
         "risk": "中高",
         "params_desc": {},
     },
+    # ── AI 推荐策略的可回测版（与「AI 推荐」页同源信号）──
+    "ai_momentum_pick": {
+        "id": "S014",
+        "path": "strategies.examples.ai_pick_strategies.MomentumPickStrategy",
+        "display_name": "动能买点（AI推荐）",
+        "category": "ai_pick",
+        "tags": ["AI推荐", "四维动能", "买卖点", "ATR止盈止损"],
+        "logic": "四维动能评分转强突破阈值买入，转弱跌破或触及ATR止盈止损离场",
+        "suitable": "回测「AI推荐·动能买点」在个股上的历史表现",
+        "risk": "中",
+        "params_desc": {"warmup": "评分预热K线数（默认60）", "use_levels": "是否启用ATR止盈止损（默认开）"},
+    },
+    "ai_pring_pick": {
+        "id": "S015",
+        "path": "strategies.examples.ai_pick_strategies.PringPickStrategy",
+        "display_name": "普林格KST（AI推荐）",
+        "category": "ai_pick",
+        "tags": ["AI推荐", "普林格", "KST", "周期金叉"],
+        "logic": "普林格KST低位金叉+长周期向上+站上MA50买入，高位死叉离场",
+        "suitable": "回测「AI推荐·普林格KST周期」在个股上的历史表现",
+        "risk": "中",
+        "params_desc": {"warmup": "KST预热K线数（默认80）", "use_levels": "是否启用止盈止损（默认开）"},
+    },
 }
 
 _CATEGORY_META = {
@@ -162,6 +185,7 @@ _CATEGORY_META = {
     "adaptive":        {"label": "自适应",   "color": "#a855f7", "icon": "cpu"},
     "ml":              {"label": "机器学习", "color": "#f59e0b", "icon": "brain"},
     "arbitrage":       {"label": "套利",     "color": "#ef4444", "icon": "zap"},
+    "ai_pick":         {"label": "AI推荐",   "color": "#ec4899", "icon": "sparkles"},
 }
 
 

@@ -193,8 +193,14 @@ info "post-install: .env + systemd + nginx ..."
 ENV_FILE="$INSTALL_DIR/.env"
 if [ ! -f "$ENV_FILE" ]; then
     cp "$INSTALL_DIR/.env.example" "$ENV_FILE"
+fi
+# 固定 JWT 密钥（代码读的是 QF_JWT_SECRET）。缺失或为空则生成一次并写死，
+# 否则每次启动随机密钥 + 多 worker 各不相同 → token 频繁失效、一直让登录。
+if ! grep -qE '^QF_JWT_SECRET=.+' "$ENV_FILE"; then
     SECRET=$("$VENV/bin/python" -c 'import secrets;print(secrets.token_hex(32))')
-    { echo ""; echo "SECRET_KEY=$SECRET"; } >> "$ENV_FILE"
+    # 删掉可能存在的空行 QF_JWT_SECRET=，再追加带值的
+    sed -i '/^QF_JWT_SECRET=$/d' "$ENV_FILE"
+    { echo ""; echo "QF_JWT_SECRET=$SECRET"; } >> "$ENV_FILE"
 fi
 chown "$SERVICE_USER":"$SERVICE_USER" "$ENV_FILE"
 chmod 600 "$ENV_FILE"

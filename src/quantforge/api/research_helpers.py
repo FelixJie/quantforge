@@ -605,12 +605,15 @@ def _loads_lenient(text: str):
 
 
 async def _chat_json(system: str, user: str, max_tokens: int, caller: str, retries: int = 2,
-                     provider: str | None = None, timeout: float | None = None):
+                     provider: str | None = None, timeout: float | None = None,
+                     patient: bool = False, cancel_cb=None, on_wait=None):
     """调用 AI 并解析 JSON；解析失败时重试（附加"只输出合法 JSON"的提示）。
 
     ``provider`` 可指定本次调用的主 provider（如 "claude-code" 走本地 Opus 4.8），
     不可用时 chat() 会自动跌回 HTTP 链。
     ``timeout`` 覆盖单次调用超时（秒）；REDUCE 等大上下文调用应传更宽松的值。
+    ``patient``/``cancel_cb``/``on_wait`` 透传给 chat()：开「耐心重试」让 429 限流不中断
+    流程（REDUCE 等长任务用），长等待期间可取消并刷新心跳。
     """
     from quantforge.api.ai_client import chat
     last_err = None
@@ -620,7 +623,8 @@ async def _chat_json(system: str, user: str, max_tokens: int, caller: str, retri
                    "确保所有字符串闭合、对象/数组括号配对、键值之间有逗号。")
         try:
             txt = await chat(system=system, user=u, max_tokens=max_tokens, caller=caller,
-                             provider=provider, timeout=timeout)
+                             provider=provider, timeout=timeout,
+                             patient=patient, cancel_cb=cancel_cb, on_wait=on_wait)
             return _loads_lenient(txt)
         except Exception as e:
             last_err = e
@@ -738,6 +742,15 @@ def _fact_block(f: dict) -> str:
         sub = "; ".join(f"{_s(s.get('module'))}-{_s(s.get('tech'))}({_s(s.get('risk'))})"
                         for s in subs)
         parts.append(f"  替代风险: {sub}")
+    if f.get("equipment"):
+        eqs = [_as_dict(e) for e in f["equipment"][:6]]
+        eq = "; ".join(
+            f"{_s(e.get('name'))}[{_s(e.get('process'))}]厂商:{_s(e.get('makers'))}"
+            f"{('国产化:' + _s(e.get('localization'))) if e.get('localization') else ''}"
+            for e in eqs if e.get("name")
+        )
+        if eq:
+            parts.append(f"  生产设备: {eq}")
     return "\n".join(parts)
 
 

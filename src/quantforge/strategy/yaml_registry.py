@@ -32,7 +32,11 @@ from typing import Any
 import yaml
 from loguru import logger
 
-_YAML_DIR = Path("strategies/yaml")
+# Locate strategies/yaml relative to the project root, not the process CWD —
+# the backend may be launched from anywhere. This file lives at
+# src/quantforge/strategy/yaml_registry.py, so the root is 4 parents up.
+_PROJECT_ROOT = Path(__file__).resolve().parents[3]
+_YAML_DIR = _PROJECT_ROOT / "strategies" / "yaml"
 
 # Maps YAML execution.strategy_class → built-in strategy metadata path
 _CLASS_MAP: dict[str, dict] = {

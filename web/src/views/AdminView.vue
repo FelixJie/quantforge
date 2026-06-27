@@ -491,7 +491,7 @@
             <option :value="300">最多 300 篇</option>
             <option :value="500">最多 500 篇</option>
           </select>
-          <button class="btn-primary" @click="startResearch" :disabled="rsBusy || (!rsKwList.length && !rsKeyword.trim())">
+          <button class="btn-primary" @click="startResearch" :disabled="rsBusy || (!rsKwList.length && !rsKeyword.trim() && !rsName.trim())">
             {{ rsBusy ? '启动中…' : '开始分析' }}
           </button>
         </div>

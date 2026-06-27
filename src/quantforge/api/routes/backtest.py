@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from quantforge.api.deps import get_backtest_engine
@@ -21,6 +22,12 @@ router = APIRouter(prefix="/backtest", tags=["backtest"])
 
 # In-memory job store (replace with DB in production)
 _jobs: dict[str, dict] = {}
+_reports: dict[str, str] = {}   # job_id → HTML 回测报告
+
+
+def store_report(job_id: str, html: str) -> None:
+    """Stash a generated HTML report so /backtest/report/{id} can serve it."""
+    _reports[job_id] = html
 
 
 class BacktestRequest(BaseModel):
@@ -79,7 +86,6 @@ async def _run_backtest(job_id: str, req: BacktestRequest, engine: BacktestEngin
         # Generate HTML report and store it
         try:
             from quantforge.backtest.report import generate_report
-            from quantforge.api.routes.optimizer import store_report
             html = generate_report(result)
             store_report(job_id, html)
         except Exception:
@@ -197,6 +203,15 @@ async def submit_backtest(
     }
     background_tasks.add_task(_run_backtest, job_id, req, engine)
     return {"job_id": job_id, "status": "queued"}
+
+
+@router.get("/report/{job_id}", response_class=HTMLResponse)
+async def download_report(job_id: str):
+    """Return the HTML report (含月度热力图) for a completed backtest job."""
+    html = _reports.get(job_id)
+    if not html:
+        raise HTTPException(status_code=404, detail="Report not found or not yet generated")
+    return HTMLResponse(content=html)
 
 
 @router.get("/{job_id}")

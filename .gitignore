@@ -67,3 +67,28 @@ data/.jwt_secret
 # 根目录临时产物（探测输出、验证结果等）
 /_*.json
 /all_skus.txt
+/rev_tmp.json
+/col_diag.txt
+/missing_skus.txt
+
+# 诊断输出（*_diag.txt：llm_diag.txt / col_diag.txt 等运行期诊断转储）
+*_diag.txt
+
+# src 下一次性中间产物（选股/策略快照 JSON，非源码）
+src/_*.json
+
+# src 下本地缓存库与缓存目录（cache.db / cache/，体积大、随机器变化，绝不入库）
+src/data/
+
+# 生成的分析报告（运行期产物）
+/reports/
+
+# 纷传公众号抓取：runtime token/缓存（token.txt 含敏感 JWT，绝不入库）
+fenchuan_blog/token.txt
+fenchuan_blog/cache.json
+fenchuan_blog/data/
+fenchuan_blog/_probe_*.json
+fenchuan_blog/__pycache__/
+
+# impeccable 技能工作目录
+.impeccable/

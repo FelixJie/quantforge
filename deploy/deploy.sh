@@ -125,9 +125,13 @@ if [ -n "$REPO_URL" ]; then
 else
     info "  copying project from $PROJECT_ROOT"
     # copy everything except volatile dirs
+    # 注意：data/ 下是线上私有数据（用户库/DB/JWT 密钥等），绝不能被本地
+    # 数据覆盖或被 --delete 清掉，否则会清空用户、轮换密钥导致全员重新登录。
+    # web/data/ 是本地研报 PDF 缓存（数千个文件），后端运行读顶层 data/，
+    # 这批纯本地缓存不需上传，传了只是浪费时间。
     rsync -a --delete \
         --exclude='.venv' --exclude='venv' --exclude='node_modules' \
-        --exclude='web/dist' --exclude='data/parquet' --exclude='data/cache' \
+        --exclude='web/dist' --exclude='data/' --exclude='web/data/' \
         --exclude='.git' --exclude='__pycache__' --exclude='*.log' \
         "$PROJECT_ROOT/" "$INSTALL_DIR/"
 fi
@@ -169,13 +173,15 @@ info "(5/7) Writing .env file ..."
 ENV_FILE="$INSTALL_DIR/.env"
 if [ ! -f "$ENV_FILE" ]; then
     cp "$INSTALL_DIR/.env.example" "$ENV_FILE"
-    # generate a random SECRET_KEY if missing
-    if ! grep -q '^SECRET_KEY=' "$ENV_FILE"; then
-        SECRET=$(openssl rand -hex 32 2>/dev/null || "$VENV/bin/python" -c 'import secrets;print(secrets.token_hex(32))')
-        echo "" >> "$ENV_FILE"
-        echo "# Auto-generated at install time" >> "$ENV_FILE"
-        echo "SECRET_KEY=$SECRET" >> "$ENV_FILE"
-    fi
+fi
+# 固定 JWT 密钥（代码读 QF_JWT_SECRET）；缺失或空则生成一次写死。
+# 否则每次启动随机密钥 + 多 worker 各不相同 → token 频繁失效、一直让登录。
+if ! grep -qE '^QF_JWT_SECRET=.+' "$ENV_FILE"; then
+    SECRET=$(openssl rand -hex 32 2>/dev/null || "$VENV/bin/python" -c 'import secrets;print(secrets.token_hex(32))')
+    sed -i '/^QF_JWT_SECRET=$/d' "$ENV_FILE"
+    echo "" >> "$ENV_FILE"
+    echo "# Auto-generated at install time" >> "$ENV_FILE"
+    echo "QF_JWT_SECRET=$SECRET" >> "$ENV_FILE"
 fi
 chown "$SERVICE_USER":"$SERVICE_USER" "$ENV_FILE"
 chmod 600 "$ENV_FILE"

@@ -15,15 +15,15 @@ for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":8000 " ^| findstr "LISTENIN
     echo  [*] Stopping old backend (PID %%a)...
     taskkill /F /PID %%a >nul 2>&1
 )
-for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":5173 " ^| findstr "LISTENING" 2^>nul') do (
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":80 " ^| findstr "LISTENING" 2^>nul') do (
     echo  [*] Stopping old frontend (PID %%a)...
     taskkill /F /PID %%a >nul 2>&1
 )
 
 REM ── Start backend ──────────────────────────────────────────────────────────
-echo  [1/2] Starting backend (port 8000)...
+echo  [1/2] Starting backend (port 8000, guarded auto-restart, no --reload)...
 if not exist logs mkdir logs
-start "QuantForge Backend" /min cmd /k "cd /d %~dp0 && python -m uvicorn quantforge.api.app:app --host 0.0.0.0 --port 8000 2>&1 | tee logs\server.log"
+start "QuantForge Backend" /min cmd /c "%~dp0run_backend.bat"
 
 REM ── Wait for backend to be ready ───────────────────────────────────────────
 set /a tries=0
@@ -40,7 +40,7 @@ goto open_browser
 echo  [OK] Backend is ready.
 
 REM ── Start frontend ─────────────────────────────────────────────────────────
-echo  [2/2] Starting frontend (port 5173)...
+echo  [2/2] Starting frontend (port 80)...
 start "QuantForge Frontend" /min cmd /k "cd /d %~dp0\web && npm run dev"
 
 REM ── Wait for frontend ──────────────────────────────────────────────────────
@@ -48,7 +48,7 @@ set /a tries=0
 :wait_frontend
 timeout /t 1 /nobreak >nul
 set /a tries+=1
-curl -s http://localhost:5173 >nul 2>&1
+curl -s http://localhost:80 >nul 2>&1
 if %errorlevel%==0 goto frontend_ready
 if %tries% lss 20 goto wait_frontend
 echo  [!] Frontend did not start in time.
@@ -60,10 +60,10 @@ echo  [OK] Frontend is ready.
 :open_browser
 echo.
 echo  ==========================================
-echo   Opening http://localhost:5173
+echo   Opening http://localhost
 echo  ==========================================
 echo.
 timeout /t 1 /nobreak >nul
-start http://localhost:5173
+start http://localhost
 
 exit

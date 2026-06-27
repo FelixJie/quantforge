@@ -1,4 +1,10 @@
-"""Stock universe management — fetch A-share market snapshot via efinance."""
+"""Stock universe management — fetch A-share market snapshot.
+
+Primary source is the local ``stock_quote`` snapshot table (refreshed in the
+background via Tencent/Sina), which is reliable here; efinance (EastMoney) is
+only a cold-start fallback since it is intermittently blocked in this
+environment.
+"""
 
 from __future__ import annotations
 
@@ -8,19 +14,73 @@ import pandas as pd
 from loguru import logger
 
 
+# Snapshot columns → universe columns. ``market_cap`` is in 元 in both the
+# snapshot table and the screener engine (which compares against 亿 * 1e8).
+_SNAPSHOT_FIELDS = [
+    "code", "name", "price", "change_pct", "high", "low", "open",
+    "volume", "turnover", "pe", "pb", "turnover_rate", "market_cap",
+]
+
+
 async def fetch_universe() -> pd.DataFrame:
     """Fetch real-time snapshot of all A-share stocks.
 
     Returns DataFrame with columns:
         code, name, price, change_pct, high, low, open,
-        volume, turnover, pe, market_cap, circulating_cap
+        volume, turnover, pe, pb, turnover_rate, market_cap, circulating_cap
     """
+    # 1) Local snapshot table — fast and reliable, no upstream dependency.
+    try:
+        df = await asyncio.to_thread(_fetch_from_snapshot)
+        if df is not None and not df.empty:
+            return df
+    except Exception as e:
+        logger.warning(f"fetch_universe: snapshot read failed, falling back: {e}")
+
+    # 2) Cold-start fallback — efinance (EastMoney), may be unavailable.
     try:
         df = await asyncio.to_thread(_fetch_sync)
         return _parse(df)
     except Exception as e:
         logger.error(f"fetch_universe failed: {e}")
         return pd.DataFrame()
+
+
+def _fetch_from_snapshot() -> pd.DataFrame:
+    """Build the universe DataFrame from the local ``stock_quote`` snapshot."""
+    from quantforge.data.storage import db_cache as _db
+
+    if _db.quote_count() == 0:
+        return pd.DataFrame()
+
+    # Pull the whole table via the paginated query (page_size caps at 500).
+    rows: list[dict] = []
+    page = 1
+    while True:
+        chunk, total = _db.quote_query(page=page, page_size=500)
+        if not chunk:
+            break
+        rows.extend(chunk)
+        if len(rows) >= total:
+            break
+        page += 1
+
+    if not rows:
+        return pd.DataFrame()
+
+    df = pd.DataFrame(rows)
+    available = [c for c in _SNAPSHOT_FIELDS if c in df.columns]
+    df = df[available].copy()
+
+    numeric_cols = ["price", "change_pct", "high", "low", "open",
+                    "volume", "turnover", "pe", "pb", "turnover_rate", "market_cap"]
+    for col in numeric_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    df = df[df["price"].notna() & (df["price"] > 0)].reset_index(drop=True)
+    logger.info(f"fetch_universe: loaded {len(df)} stocks from snapshot")
+    return df
 
 
 def _fetch_sync() -> pd.DataFrame:

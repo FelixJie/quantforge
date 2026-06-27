@@ -1,0 +1,82 @@
+name: pring_kst
+display_name: 普林格KST周期
+description: |
+  基于马丁·普林格(Martin Pring)的市场周期模型与 KST(Know Sure Thing)动量指标。
+  KST 由四个不同周期的 ROC(变动率)平滑后加权合成，过滤短期噪音、捕捉中期主趋势。
+  结合普林格"六阶段经济周期"判断市场所处位置：阶段一/二(债券与股市见底回升)是
+  最佳买入窗口。当 KST 上穿其信号线、且处于零轴下方刚转头向上时，胜率最高。
+  属于中长线趋势跟随策略，强调多周期动量共振而非短线博弈。
+
+screener:
+  category: trend
+  category_color: "#0891b2"
+  icon: trending-up
+  risk: 中
+  suitable: 趋势确立初期、周期底部回升阶段、中长线波段布局
+  holding_period: 1-3个月
+  filters:
+    min_price: 3.0
+    max_pe: 60.0
+    min_pe: 3.0
+    min_change_pct: -8.0
+  factor_weights:
+    momentum: 8
+    quality: 5
+    value: 4
+    large_cap: 4
+    liquidity: 4
+    value_composite: 3
+    size: 2
+    pb: 2
+    graham: 1
+    float_ratio: 1
+  top_n: 20
+
+entry_conditions:
+  - KST 指标上穿其 9 日信号线（KST > KST_signal），形成金叉
+  - KST 数值位于零轴下方或刚上穿零轴（处于周期底部/回升初期，而非高位追涨）
+  - 长周期 KST(由 ROC 周期 10/15/20/30 合成)方向向上，确认中期主趋势未走坏
+  - 股价站上 MA50，且 MA50 拐头向上（趋势同步确认）
+  - 普林格六阶段判断处于阶段一至阶段三（利率见顶回落、股市领先经济触底回升）
+  - 成交量较前期温和放大，资金回流而非缩量反弹
+
+exit_conditions:
+  - KST 下穿信号线形成死叉，且发生在零轴上方高位（动量见顶）
+  - 长周期 KST 方向转为向下，中期趋势破坏
+  - 股价跌破 MA50 且不能快速收回
+  - 进入普林格阶段五/六（利率上行、股市领先见顶回落）
+  - 跌破入场价 8% 强制止损
+
+execution:
+  strategy_class: macd
+  strategy_params:
+    fast_period: 12
+    slow_period: 26
+    signal_period: 9
+
+parameters:
+  # KST 四段 ROC 周期与权重 (普林格经典日线参数)
+  kst_roc1_period: 10
+  kst_roc1_sma: 10
+  kst_roc1_weight: 1
+  kst_roc2_period: 15
+  kst_roc2_sma: 10
+  kst_roc2_weight: 2
+  kst_roc3_period: 20
+  kst_roc3_sma: 10
+  kst_roc3_weight: 3
+  kst_roc4_period: 30
+  kst_roc4_sma: 15
+  kst_roc4_weight: 4
+  kst_signal_period: 9
+  ma_trend_period: 50
+  stop_loss_pct: 0.08
+  take_profit_pct: 0.25
+  max_hold_days: 60
+
+risk_notes: |
+  KST 本质是平滑后的动量指标，转折信号滞后于价格，不适合做短线抢反弹。
+  零轴上方的金叉(高位金叉)假信号多，应优先选择零轴下方/附近的金叉。
+  六阶段周期判断依赖宏观利率与经济数据，主观性强，建议结合长债收益率、PMI 辅助验证。
+  单边急跌行情中 KST 可能持续钝化，需用 MA50 止损纪律强制离场，不可死扛。
+  建议分批建仓：KST 金叉建半仓，长周期 KST 同步向上再加满。

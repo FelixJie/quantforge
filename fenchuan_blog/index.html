@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>纷传 · 最新博客</title>
+<style>
+  :root{
+    --bg:#0e1116; --panel:#161b22; --panel2:#1c232d; --border:#2a3340;
+    --text:#e6edf3; --muted:#8b98a5; --accent:#3b82f6; --ok:#22c55e;
+    --warn:#f59e0b; --err:#ef4444;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;line-height:1.6}
+  header{position:sticky;top:0;z-index:10;background:rgba(14,17,22,.85);
+    backdrop-filter:blur(8px);border-bottom:1px solid var(--border);
+    padding:14px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  header h1{font-size:18px;margin:0;font-weight:600}
+  .dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:6px}
+  .status{font-size:13px;color:var(--muted);display:flex;align-items:center}
+  .spacer{flex:1}
+  button{background:var(--panel2);color:var(--text);border:1px solid var(--border);
+    padding:7px 14px;border-radius:8px;cursor:pointer;font-size:13px}
+  button:hover{border-color:var(--accent)}
+  .wrap{max-width:760px;margin:0 auto;padding:20px}
+  .banner{background:#3a2a12;border:1px solid var(--warn);color:#f9d99a;
+    padding:12px 16px;border-radius:10px;margin-bottom:16px;font-size:14px;display:none}
+  .banner code{background:#00000040;padding:1px 6px;border-radius:4px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:14px;
+    padding:16px 18px;margin-bottom:14px;transition:border-color .15s}
+  .card:hover{border-color:#3a4655}
+  .card.is-new{border-color:var(--err);box-shadow:0 0 0 1px var(--err) inset}
+  .new-badge{font-size:11px;background:#3a1418;color:#ff8a93;border:1px solid var(--err);
+    padding:1px 7px;border-radius:6px;margin-left:8px;vertical-align:middle;font-weight:700}
+  #markread{display:none;background:#3a1418;border-color:var(--err);color:#ff8a93}
+  .meta{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+  .avatar{width:38px;height:38px;border-radius:50%;object-fit:cover;background:var(--panel2);flex:none}
+  .author{font-weight:600;font-size:14px}
+  .time{font-size:12px;color:var(--muted)}
+  .title{font-size:16px;font-weight:600;margin:2px 0 8px}
+  .text{font-size:14.5px;color:#cdd6e0;white-space:pre-wrap;word-break:break-word}
+  .imgs{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:12px}
+  .imgs img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;background:var(--panel2);cursor:zoom-in}
+  .imgs.single{grid-template-columns:1fr;max-width:420px}
+  .imgs.single img{aspect-ratio:auto;max-height:420px;object-fit:contain}
+  .badge{font-size:11px;background:#3b2f12;color:var(--warn);border:1px solid #6b4f1a;
+    padding:1px 7px;border-radius:6px;margin-left:8px;vertical-align:middle}
+  .links{margin-top:10px;display:flex;flex-direction:column;gap:5px}
+  .links a{font-size:13.5px;color:#7aa7ff;text-decoration:none;
+    background:var(--panel2);border:1px solid var(--border);border-radius:7px;
+    padding:6px 10px;display:inline-block;word-break:break-all}
+  .links a:hover{border-color:var(--accent)}
+  .footer{display:flex;gap:16px;margin-top:12px;font-size:12.5px;color:var(--muted);
+    align-items:center}
+  .footer a{color:var(--muted);text-decoration:none;margin-left:auto}
+  .footer a:hover{color:var(--accent)}
+  .empty{text-align:center;color:var(--muted);padding:60px 0}
+  .lightbox{position:fixed;inset:0;background:#000d;display:none;align-items:center;
+    justify-content:center;z-index:50;cursor:zoom-out}
+  .lightbox img{max-width:92vw;max-height:92vh;border-radius:8px}
+</style>
+</head>
+<body>
+<header>
+  <h1>📡 纷传 · 最新博客</h1>
+  <span class="status" id="status"><span class="dot" style="background:#888"></span>加载中…</span>
+  <div class="spacer"></div>
+  <button id="markread">标为已读</button>
+  <button id="refresh">立即刷新</button>
+</header>
+
+<div class="wrap">
+  <div class="banner" id="banner"></div>
+  <div id="list"><div class="empty">加载中…</div></div>
+</div>
+
+<div class="lightbox" id="lightbox"><img id="lightbox-img" alt=""/></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const fmtTime = t => {
+  if(!t) return "";
+  let n = Number(t);
+  if(!isNaN(n) && n > 0){ if(n < 1e12) n *= 1000; return new Date(n).toLocaleString("zh-CN"); }
+  return String(t);
+};
+const ago = ts => {
+  if(!ts) return "从未";
+  const s = Math.floor(Date.now()/1000 - ts);
+  if(s < 60) return s + " 秒前";
+  if(s < 3600) return Math.floor(s/60) + " 分钟前";
+  return Math.floor(s/3600) + " 小时前";
+};
+const esc = s => String(s||"").replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+
+function statusUI(d){
+  const map = {
+    ok:   ["var(--ok)",  "正常"],
+    login_required: ["var(--warn)", "需要登录"],
+    error:["var(--err)", "出错"],
+    init: ["#888", "初始化"],
+  };
+  const [color, label] = map[d.status] || ["#888", d.status];
+  $("#status").innerHTML =
+    `<span class="dot" style="background:${color}"></span>` +
+    `${label} · 更新于 ${ago(d.updated_at)} · 共 ${(d.posts||[]).length} 条`;
+  const b = $("#banner");
+  if(d.status === "login_required"){
+    b.style.display = "block";
+    b.innerHTML = `⚠️ ${esc(d.error||"登录态失效")}。<button id="qrlogin">扫码重新登录</button> <span id="qrlogin-tip"></span>`;
+  } else if(d.status === "error"){
+    b.style.display = "block";
+    b.innerHTML = `❌ ${esc(d.error)}`;
+  } else {
+    b.style.display = "none";
+  }
+}
+
+const SEEN_KEY = "fc_seen_max_id";
+let curMaxId = 0;          // 当前已加载帖子的最大 id
+const idNum = p => Number(p.id) || 0;
+const getSeen = () => Number(localStorage.getItem(SEEN_KEY) || 0);
+
+function updateNewUI(posts){
+  curMaxId = posts.reduce((m,p) => Math.max(m, idNum(p)), 0);
+  let seen = getSeen();
+  if(seen === 0){            // 首次访问: 把现有内容设为已读基线, 不全部标红
+    localStorage.setItem(SEEN_KEY, String(curMaxId));
+    seen = curMaxId;
+  }
+  const newCount = posts.filter(p => idNum(p) > seen).length;
+  const btn = $("#markread");
+  btn.style.display = newCount ? "inline-block" : "none";
+  btn.textContent = `标为已读 (${newCount})`;
+  return seen;
+}
+
+function render(posts){
+  const list = $("#list");
+  if(!posts || !posts.length){
+    list.innerHTML = `<div class="empty">暂无内容</div>`;
+    $("#markread").style.display = "none";
+    return;
+  }
+  const seen = updateNewUI(posts);
+  list.innerHTML = posts.map(p => {
+    const isNew = idNum(p) > seen;
+    const imgs = (p.images||[]).filter(im => im && (im.thumb||im.full));
+    const imgsHtml = imgs.length
+      ? `<div class="imgs ${imgs.length===1?'single':''}">` +
+        imgs.map(im => `<img loading="lazy" src="${esc(im.thumb||im.full)}" data-full="${esc(im.full||im.thumb)}" onerror="this.style.display='none'">`).join("") +
+        `</div>` : "";
+    const linksHtml = (p.links&&p.links.length)
+      ? `<div class="links">` +
+        p.links.map(l => `<a href="${esc(l.url)}" target="_blank" rel="noopener">🔗 ${esc(l.text)}</a>`).join("") +
+        `</div>` : "";
+    const s = p.stats||{};
+    const footer = `<div class="footer">
+        <span>👁 ${s.view||0}</span><span>👍 ${s.zan||0}</span><span>💬 ${s.comment||0}</span>
+        ${p.url ? `<a href="${esc(p.url)}" target="_blank" rel="noopener">查看原帖 →</a>` : ""}
+      </div>`;
+    return `<div class="card ${isNew?'is-new':''}">
+      <div class="meta">
+        ${p.avatar ? `<img class="avatar" src="${esc(p.avatar)}" onerror="this.style.visibility='hidden'">` : `<div class="avatar"></div>`}
+        <div>
+          <div class="author">${esc(p.author||"匿名")}${isNew?`<span class="new-badge">NEW</span>`:""}${p.is_top?`<span class="badge">置顶</span>`:""}</div>
+          <div class="time">${esc(fmtTime(p.time))}</div>
+        </div>
+      </div>
+      ${p.title ? `<div class="title">${esc(p.title)}</div>` : ""}
+      ${p.text ? `<div class="text">${esc(p.text)}</div>` : ""}
+      ${imgsHtml}
+      ${linksHtml}
+      ${footer}
+    </div>`;
+  }).join("");
+}
+
+async function load(){
+  try{
+    const d = await (await fetch("/api/posts", {cache:"no-store"})).json();
+    statusUI(d);
+    render(d.posts);
+  }catch(e){
+    $("#status").innerHTML = `<span class="dot" style="background:var(--err)"></span>无法连接服务`;
+  }
+}
+
+$("#markread").onclick = () => {
+  localStorage.setItem(SEEN_KEY, String(curMaxId));
+  load();   // 重新渲染, 清掉 NEW 标记
+};
+
+$("#refresh").onclick = async () => {
+  $("#refresh").textContent = "刷新中…";
+  await fetch("/api/refresh");
+  setTimeout(async () => { await load(); $("#refresh").textContent = "立即刷新"; }, 1500);
+};
+
+// 扫码登录(事件委托, 因为按钮在动态横幅里)
+document.addEventListener("click", async e => {
+  if(e.target.id === "qrlogin"){
+    e.target.disabled = true;
+    const tip = $("#qrlogin-tip");
+    try{
+      const r = await (await fetch("/api/login")).json();
+      tip.textContent = r.started ? "已打开浏览器，请用微信扫码…登录后会自动恢复。"
+                                  : "登录窗口已在进行中，请在已打开的浏览器里扫码。";
+    }catch(err){
+      tip.textContent = "打开失败，请在 fenchuan_blog 目录手动运行 python login.py";
+    }
+  }
+});
+
+// 图片灯箱
+document.addEventListener("click", e => {
+  if(e.target.tagName === "IMG" && e.target.closest(".imgs")){
+    $("#lightbox-img").src = e.target.dataset.full || e.target.src;
+    $("#lightbox").style.display = "flex";
+  }
+});
+$("#lightbox").onclick = () => $("#lightbox").style.display = "none";
+
+load();
+setInterval(load, 30000);   // 前端每 30s 拉一次缓存; 后端每 10 分钟真抓
+</script>
+</body>
+</html>

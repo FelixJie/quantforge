@@ -101,9 +101,13 @@ echo "  [ok] frontend built at $APP_DIR/web/dist"
 echo "[9/10] .env + systemd + nginx..."
 if [ ! -f $APP_DIR/.env ]; then
     cp $APP_DIR/.env.example $APP_DIR/.env
+fi
+# 固定 JWT 密钥（代码读 QF_JWT_SECRET）；否则每次启动随机 + 多 worker 不一致 → 一直让登录
+if ! grep -qE '^QF_JWT_SECRET=.+' $APP_DIR/.env; then
     SECRET=$($APP_DIR/.venv/bin/python -c 'import secrets;print(secrets.token_hex(32))')
+    sed -i '/^QF_JWT_SECRET=$/d' $APP_DIR/.env
     echo "" >> $APP_DIR/.env
-    echo "SECRET_KEY=$SECRET" >> $APP_DIR/.env
+    echo "QF_JWT_SECRET=$SECRET" >> $APP_DIR/.env
 fi
 chown $SVC_USER:$SVC_USER $APP_DIR/.env
 chmod 600 $APP_DIR/.env

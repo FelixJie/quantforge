@@ -143,8 +143,10 @@ export function useResearch() {
     if (busy.value) return
     // 收集关键词：已添加的清单 + 输入框里尚未回车的残留文本
     const pending = (keyword.value || '').split(/[,，、\s]+/).map(s => s.trim()).filter(Boolean)
-    const kws = [...new Set([...kwList.value, ...pending])]
-    if (!kws.length) { msg.value = '请至少添加一个关键词'; msgType.value = 'err'; return }
+    let kws = [...new Set([...kwList.value, ...pending])]
+    // 未填关键词但填了分析名称：默认用分析名称作为检索关键词
+    if (!kws.length && name.value.trim()) kws = [name.value.trim()]
+    if (!kws.length) { msg.value = '请至少添加一个关键词或填写分析名称'; msgType.value = 'err'; return }
     const display = (name.value || '').trim() || kws[0]
     busy.value = true
     msg.value = ''

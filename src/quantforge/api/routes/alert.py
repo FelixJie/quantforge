@@ -190,6 +190,120 @@ async def _fetch_quote(code: str) -> Optional[Dict[str, Any]]:
         return None
 
 
+async def _fetch_quotes_batch(codes) -> Dict[str, Dict[str, Any]]:
+    """Batch-fetch quotes via the shared datasource (腾讯/iFinD, works behind proxy).
+
+    One network round-trip for the whole code set — far cheaper than per-rule
+    efinance calls.  ``volume`` is not provided here, so volume_spike rules are
+    only evaluated on the manual ``/check`` path (which uses efinance per rule).
+    """
+    import asyncio
+
+    codes = list({c for c in codes if c})
+    if not codes:
+        return {}
+
+    def _sync():
+        try:
+            from quantforge.data.feed import datasource
+            raw = datasource.quotes(codes)
+            out: Dict[str, Dict[str, Any]] = {}
+            for c, q in (raw or {}).items():
+                out[c] = {
+                    "code": c,
+                    "name": q.get("name"),
+                    "price": q.get("price"),
+                    "change_pct": q.get("change_pct"),
+                    "volume": None,
+                    "pre_close": q.get("last_close"),
+                    # 智能盯盘要用的富字段(腾讯门面已提供)
+                    "vol_ratio": q.get("vol_ratio"),
+                    "high": q.get("high"),
+                    "low": q.get("low"),
+                    "open": q.get("open"),
+                    "limit_up": q.get("limit_up"),
+                    "limit_down": q.get("limit_down"),
+                }
+            return out
+        except Exception:
+            return {}
+
+    try:
+        return await asyncio.to_thread(_sync)
+    except Exception:
+        return {}
+
+
+# ── 智能盯盘辅助：价格滚动历史 + 日线(只读本地，无网络) ─────────────────────────
+import time as _time
+
+# code -> [(epoch, price), ...]，仅保留最近 ~15min，供快速拉升/跳水 & 均线穿越判定
+_PRICE_HIST: Dict[str, list] = {}
+_HIST_WINDOW = 900          # 15 分钟
+_RAPID_WINDOW = 300         # 快速拉升/跳水观察窗口 5 分钟
+
+
+def _record_prices(quote_map: Dict[str, Dict[str, Any]]) -> None:
+    """把本轮行情写入滚动价格历史(每轮全局调用一次即可)。"""
+    now = _time.time()
+    for code, q in (quote_map or {}).items():
+        p = q.get("price")
+        if p is None:
+            continue
+        hist = _PRICE_HIST.setdefault(code, [])
+        if hist and now - hist[-1][0] < 20:   # 同一轮多用户重复，20s 内去重
+            continue
+        hist.append((now, float(p)))
+        cutoff = now - _HIST_WINDOW
+        while hist and hist[0][0] < cutoff:
+            hist.pop(0)
+
+
+def _price_ago(code: str, seconds: int) -> Optional[float]:
+    """返回 ~seconds 秒前的价格(取窗口内最早一笔)，不足则 None。"""
+    hist = _PRICE_HIST.get(code) or []
+    if not hist:
+        return None
+    now = _time.time()
+    older = [p for t, p in hist if now - t >= seconds]
+    if older:
+        return older[-1]
+    if hist and now - hist[0][0] >= seconds * 0.6:
+        return hist[0][1]
+    return None
+
+
+_bars_cache: Dict[str, tuple] = {}    # code -> (ts, bars)
+
+
+def _daily_bars(code: str) -> list:
+    """本地日线(只读 db_cache，自选已后台预热)，60s 进程缓存。"""
+    now = _time.time()
+    ts, bars = _bars_cache.get(code, (0, None))
+    if bars is not None and now - ts < 60:
+        return bars
+    try:
+        from quantforge.data.storage import db_cache
+        bars = db_cache.kline_load(code, "day", 90) or []
+    except Exception:
+        bars = []
+    _bars_cache[code] = (now, bars)
+    return bars
+
+
+def _today_str() -> str:
+    from datetime import datetime, timezone, timedelta
+    return datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d")
+
+
+def _closed_bars(code: str, n: int) -> list:
+    """最近 n 根**已收盘**日线(剔除当日那根)，oldest→newest。"""
+    bars = _daily_bars(code)
+    today = _today_str()
+    closed = [b for b in bars if str(b.get("date") or "")[:10] != today]
+    return closed[-n:] if n > 0 else closed
+
+
 # ── Detection engine ────────────────────────────────────────────────────────
 
 def _should_trigger(rule: Dict[str, Any], quote: Dict[str, Any]) -> Optional[str]:
@@ -213,11 +327,71 @@ def _should_trigger(rule: Dict[str, Any], quote: Dict[str, Any]) -> Optional[str
         return f"{name}({code}) 当前跌幅 {change_pct:.2f}% 超过了您的预警阈值 -{target:.2f}%"
     if rule_type == "volume_spike" and volume is not None and volume > target:
         return f"{name}({code}) 当前成交量 {volume:,.0f} 超过了您的预警阈值 {target:,.0f}"
+
+    # ── 智能盯盘类 ─────────────────────────────────────────────────────────
+    # 快速拉升/跳水：5 分钟内涨/跌幅达到 target%
+    if rule_type in ("rapid_rise", "rapid_fall") and price is not None:
+        ref = _price_ago(code, _RAPID_WINDOW)
+        if ref and ref > 0:
+            move = (price - ref) / ref * 100
+            if rule_type == "rapid_rise" and move >= target:
+                return f"{name}({code}) 5分钟内快速拉升 {move:+.2f}%（现价 {price:.2f}）"
+            if rule_type == "rapid_fall" and move <= -target:
+                return f"{name}({code}) 5分钟内快速跳水 {move:.2f}%（现价 {price:.2f}）"
+
+    # 封涨停 / 触及跌停（现价贴近涨/跌停价）
+    if rule_type == "limit_up" and price is not None and quote.get("limit_up"):
+        if price >= float(quote["limit_up"]) * 0.999:
+            return f"{name}({code}) 封涨停 {price:.2f}（涨停价 {float(quote['limit_up']):.2f}）"
+    if rule_type == "limit_down" and price is not None and quote.get("limit_down"):
+        if price <= float(quote["limit_down"]) * 1.001:
+            return f"{name}({code}) 触及跌停 {price:.2f}（跌停价 {float(quote['limit_down']):.2f}）"
+
+    # 量比放大
+    if rule_type == "vol_ratio_above":
+        vr = quote.get("vol_ratio")
+        if vr is not None and float(vr) >= target:
+            return f"{name}({code}) 量比放大至 {float(vr):.2f}（阈值 {target:.2f}）"
+
+    # 创 N 日新高 / 新低（target=N 天，缺省 20）
+    if rule_type in ("new_high", "new_low") and price is not None:
+        n = int(target) if target and target >= 2 else 20
+        closed = _closed_bars(code, n)
+        if len(closed) >= max(2, n // 2):
+            if rule_type == "new_high":
+                highs = [float(b["high"]) for b in closed if b.get("high") is not None]
+                if highs and price > max(highs):
+                    return f"{name}({code}) 创 {n} 日新高 {price:.2f}（前高 {max(highs):.2f}）"
+            else:
+                lows = [float(b["low"]) for b in closed if b.get("low") is not None]
+                if lows and price < min(lows):
+                    return f"{name}({code}) 创 {n} 日新低 {price:.2f}（前低 {min(lows):.2f}）"
+
+    # 均线上穿 / 下破（target=均线周期，如 5/10/20）
+    if rule_type in ("ma_above", "ma_below") and price is not None:
+        n = int(target) if target and target >= 2 else 20
+        closed = _closed_bars(code, n)
+        if len(closed) >= max(2, n - 1):
+            closes = [float(b["close"]) for b in closed if b.get("close") is not None]
+            if closes:
+                ma = sum(closes) / len(closes)
+                prev = _price_ago(code, _RAPID_WINDOW)   # 用 5min 前价判断"穿越"
+                if rule_type == "ma_above" and price >= ma and (prev is None or prev < ma):
+                    return f"{name}({code}) 上穿 MA{n} {ma:.2f}（现价 {price:.2f}）"
+                if rule_type == "ma_below" and price <= ma and (prev is None or prev > ma):
+                    return f"{name}({code}) 跌破 MA{n} {ma:.2f}（现价 {price:.2f}）"
     return None
 
 
-async def check_rules_for_user(user_id: str, user_name: str = "") -> Dict[str, Any]:
-    """Check all enabled rules for a user.  Returns a summary + any new notifications."""
+async def check_rules_for_user(
+    user_id: str, user_name: str = "",
+    quote_map: Optional[Dict[str, Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    """Check all enabled rules for a user.  Returns a summary + any new notifications.
+
+    ``quote_map`` (code → quote) lets a caller pre-batch quotes (background
+    poller); any code missing from it falls back to a per-code efinance fetch.
+    """
     data = _load_alerts(user_id)
     rules = data.get("rules", [])
     if not rules:
@@ -240,7 +414,7 @@ async def check_rules_for_user(user_id: str, user_name: str = "") -> Dict[str, A
             except Exception:
                 pass
 
-        quote = await _fetch_quote(rule["code"])
+        quote = (quote_map or {}).get(rule["code"]) or await _fetch_quote(rule["code"])
         if not quote:
             continue
         msg = _should_trigger(rule, quote)
@@ -295,6 +469,63 @@ async def check_rules_for_user(user_id: str, user_name: str = "") -> Dict[str, A
     return {"checked": len(rules), "triggered": len(triggered), "events": triggered}
 
 
+# ── Background polling (all users, market hours) ─────────────────────────────
+
+def _list_alert_user_ids() -> List[str]:
+    """User ids that have an alerts file on disk."""
+    try:
+        return [p.stem for p in _ALERTS_DIR.glob("*.json")]
+    except Exception:
+        return []
+
+
+async def check_all_users() -> Dict[str, Any]:
+    """Run the detection engine for every user with rules (batched quotes)."""
+    users = 0
+    triggered = 0
+    for uid in _list_alert_user_ids():
+        data = _load_alerts(uid)
+        codes = {r["code"] for r in data.get("rules", []) if r.get("enabled", True)}
+        if not codes:
+            continue
+        qmap = await _fetch_quotes_batch(codes)
+        _record_prices(qmap)                 # 滚动价格历史(快速拉升/均线穿越用)
+        res = await check_rules_for_user(uid, quote_map=qmap)
+        users += 1
+        triggered += res.get("triggered", 0)
+    return {"users": users, "triggered": triggered}
+
+
+def _in_market_hours() -> bool:
+    """True during A-share continuous trading (Beijing time, Mon-Fri)."""
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone(timedelta(hours=8)))
+    if now.weekday() >= 5:
+        return False
+    hm = now.hour * 60 + now.minute
+    # 9:25 (集合竞价收尾) ~ 15:02，覆盖早/午盘，避开非交易时段空转
+    return (9 * 60 + 25) <= hm <= (15 * 60 + 2)
+
+
+async def alert_poll_loop(interval: int = 60) -> None:
+    """Background scheduler: poll all users' alert rules during market hours."""
+    import asyncio
+    from loguru import logger
+
+    logger.info("alert poll loop started (interval=%ss)" % interval)
+    while True:
+        try:
+            if _in_market_hours():
+                res = await check_all_users()
+                if res.get("triggered"):
+                    logger.info(f"alert poll: {res['triggered']} 条预警触发 "
+                                f"(across {res['users']} 用户)")
+        except Exception as exc:
+            from loguru import logger as _lg
+            _lg.debug(f"alert poll loop error: {exc}")
+        await asyncio.sleep(interval)
+
+
 # ── Routes ──────────────────────────────────────────────────────────────────
 
 @router.get("/", response_model=List[AlertRule])
@@ -310,7 +541,12 @@ async def create_alert(
     current_user: dict = Depends(get_current_user),
 ):
     """Create a new alert rule for the current user."""
-    valid_types = {"price_above", "price_below", "change_above", "change_below", "volume_spike"}
+    valid_types = {
+        "price_above", "price_below", "change_above", "change_below", "volume_spike",
+        # 智能盯盘
+        "rapid_rise", "rapid_fall", "limit_up", "limit_down", "vol_ratio_above",
+        "new_high", "new_low", "ma_above", "ma_below",
+    }
     if req.type not in valid_types:
         raise HTTPException(status_code=400, detail=f"无效的预警类型，支持: {', '.join(valid_types)}")
 
@@ -378,8 +614,14 @@ async def toggle_alert(
 
 @router.post("/check")
 async def check_alerts(current_user: dict = Depends(get_current_user)):
-    """Run the alert detection engine for this user's rules."""
-    return await check_rules_for_user(current_user["id"], current_user.get("username", ""))
+    """Run the alert detection engine for this user's rules (批量行情，富字段可用)。"""
+    data = _load_alerts(current_user["id"])
+    codes = {r["code"] for r in data.get("rules", []) if r.get("enabled", True)}
+    qmap = await _fetch_quotes_batch(codes) if codes else {}
+    _record_prices(qmap)
+    return await check_rules_for_user(
+        current_user["id"], current_user.get("username", ""), quote_map=qmap or None
+    )
 
 
 @router.get("/notifications")

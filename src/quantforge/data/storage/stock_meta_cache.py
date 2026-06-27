@@ -45,21 +45,57 @@ def _is_stale() -> bool:
     return (datetime.now() - _loaded_at) > timedelta(hours=_MAX_AGE_HOURS)
 
 
-def _load_from_file() -> bool:
-    """Load cache from disk. Returns True if loaded and not stale."""
+def _normalize_store(raw: dict) -> dict:
+    """Force the store to be keyed by 6-digit code with ``name`` = display name.
+
+    efinance's ``get_realtime_quotes`` column order has flipped historically
+    (code vs name), which silently produced a store keyed by *name* with the
+    6-digit code stuffed into the ``name`` field. That inversion breaks every
+    consumer (``get_name``/``search_stocks``/机构荐股 linkification all expect a
+    code→name map). Detecting the 6-digit field per entry and re-keying makes
+    loading robust to whichever orientation the source/disk happens to be in.
+    """
+    fixed: dict[str, dict] = {}
+    for k, v in (raw or {}).items():
+        info = dict(v) if isinstance(v, dict) else {"name": v}
+        key = str(k).strip()
+        name_field = str(info.get("name", "")).strip()
+        if key.isdigit() and len(key) == 6:
+            code, disp = key, name_field            # already correct
+        elif name_field.isdigit() and len(name_field) == 6:
+            code, disp = name_field, key            # inverted: name field holds the code
+        else:
+            code, disp = key, name_field            # unknown shape — leave as-is
+        info["name"] = disp
+        fixed[code] = info
+    return fixed
+
+
+def _load_from_file(allow_stale: bool = False) -> bool:
+    """Load cache from disk.
+
+    Returns True if loaded. By default a cache older than ``_MAX_AGE_HOURS`` is
+    treated as stale and *not* loaded (so the caller triggers a network refresh).
+    Pass ``allow_stale=True`` to load regardless of age — used as a fallback when
+    the network refresh fails, since stale stock names are far better than an
+    empty cache (names barely change, and an empty cache silently disables
+    features like 机构荐股 stock linkification).
+    """
     if not _CACHE_FILE.exists():
         return False
     try:
         data = json.loads(_CACHE_FILE.read_text(encoding="utf-8"))
         ts = datetime.fromisoformat(data.get("updated_at", "2000-01-01"))
-        if (datetime.now() - ts) > timedelta(hours=_MAX_AGE_HOURS):
+        if not allow_stale and (datetime.now() - ts) > timedelta(hours=_MAX_AGE_HOURS):
             logger.debug("Stock meta cache on disk is stale")
             return False
         global _store, _loaded_at
-        _store = data.get("stocks", {})
+        _store = _normalize_store(data.get("stocks", {}))
         _loaded_at = ts
-        logger.info(f"Stock meta cache loaded from disk: {len(_store)} stocks")
-        return True
+        stale = (datetime.now() - ts) > timedelta(hours=_MAX_AGE_HOURS)
+        logger.info(f"Stock meta cache loaded from disk: {len(_store)} stocks"
+                    + ("（已过期，作为网络失败兜底）" if stale else ""))
+        return bool(_store)
     except Exception as e:
         logger.warning(f"Failed to load stock meta cache from disk: {e}")
         return False
@@ -137,15 +173,16 @@ async def refresh(force: bool = False):
             except Exception:
                 continue
 
-        _store = new_store
+        _store = _normalize_store(new_store)
         _loaded_at = datetime.now()
         _save_to_file()
         logger.info(f"Stock meta cache refreshed: {len(_store)} stocks")
     except Exception as e:
         logger.warning(f"Stock meta cache refresh failed: {e}")
-        # Fall back to stale disk cache if available
+        # Fall back to stale disk cache if available — stale names beat an empty
+        # cache (an empty store silently disables 机构荐股 stock linkification etc.).
         if not _store:
-            _load_from_file()
+            _load_from_file(allow_stale=True)
 
 
 def get_stock_info(code: str) -> dict | None:

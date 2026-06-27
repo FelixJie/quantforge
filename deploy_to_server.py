@@ -41,6 +41,10 @@ EXCLUDE_DIRS = {
 }
 # Dirs excluded only at the TOP level — must NOT match src/quantforge/data:
 EXCLUDE_TOP_DIRS = {"data"}
+# Exact relative-path prefixes to exclude (local caches that must never ship).
+# web/data/cache holds thousands of downloaded research PDFs — pure local cache,
+# the backend reads top-level data/ at runtime, so shipping these only wastes time.
+EXCLUDE_PREFIXES = ("web/data/",)
 EXCLUDE_SUFFIXES = (".log", ".pyc", ".pyo", ".db", ".db-wal", ".db-shm")
 
 
@@ -100,6 +104,8 @@ def is_excluded(rel: str) -> bool:
     if any(p in EXCLUDE_DIRS for p in parts):
         return True
     if parts[0] in EXCLUDE_TOP_DIRS:
+        return True
+    if any(rel == p.rstrip("/") or rel.startswith(p) for p in EXCLUDE_PREFIXES):
         return True
     name = parts[-1]
     return any(name.endswith(s) for s in EXCLUDE_SUFFIXES)

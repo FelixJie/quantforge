@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- 仅对已部署的云端后端放行明文 HTTP(后端还在 80 端口、未上 HTTPS)。
+         其余主机仍强制 HTTPS。后端换 IP / 上域名后,改这里的 domain。 -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">106.12.146.52</domain>
+    </domain-config>
+</network-security-config>

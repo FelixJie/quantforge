@@ -81,6 +81,74 @@
         <div v-else class="sec-empty"><span class="spinner"></span></div>
       </div>
 
+      <!-- ── 3.5 机构荐股 ───────────────────────────────────────────────── -->
+      <div class="section-block card">
+        <div class="sec-title-row">
+          <span class="sec-title">机构荐股</span>
+          <span v-if="repSummary?.count" class="rep-sub text-3">近 {{ repSummary.count }} 篇 · 最新 {{ repSummary.latest_date }}</span>
+          <div style="flex:1"></div>
+          <span v-if="repSummary?.top_rating" :class="['rep-toprating', ratingCls(repSummary.top_rating)]">{{ repSummary.top_rating }}</span>
+        </div>
+
+        <div v-if="loadingReports" class="sec-loading"><span class="spinner"></span>加载机构研报...</div>
+        <template v-else-if="repSummary?.count">
+          <!-- 评级分布 -->
+          <div class="rating-chips">
+            <span v-for="(n, name) in repSummary.ratings" :key="name" :class="['rating-chip', ratingCls(name)]">
+              {{ name }} <b>{{ n }}</b>
+            </span>
+          </div>
+
+          <!-- 目标价：一致/最高/最低 + 较现价空间 -->
+          <div v-if="repSummary.target" class="rep-targets">
+            <div class="rt-item rt-avg">
+              <span class="rt-lbl">一致目标价</span>
+              <span class="rt-val">{{ repSummary.target.avg }}</span>
+              <span v-if="targetUpside(repSummary.target.avg) != null" :class="['rt-up', targetUpside(repSummary.target.avg) >= 0 ? 'pos' : 'neg']">
+                {{ targetUpside(repSummary.target.avg) >= 0 ? '+' : '' }}{{ targetUpside(repSummary.target.avg) }}%
+              </span>
+            </div>
+            <div class="rt-item"><span class="rt-lbl">最高</span><span class="rt-val">{{ repSummary.target.high }}</span></div>
+            <div class="rt-item"><span class="rt-lbl">最低</span><span class="rt-val">{{ repSummary.target.low }}</span></div>
+            <div class="rt-item"><span class="rt-lbl">给价机构</span><span class="rt-val">{{ repSummary.target.count }}家</span></div>
+          </div>
+
+          <!-- 一致预期 EPS/PE -->
+          <div class="consensus">
+            <div class="cons-item"><span class="ck">今年</span><span class="cv">EPS {{ fmtNum(repSummary.eps_this) }}</span><span class="ck2">PE {{ fmtNum(repSummary.pe_this) }}</span></div>
+            <div class="cons-item"><span class="ck">明年</span><span class="cv">EPS {{ fmtNum(repSummary.eps_next) }}</span><span class="ck2">PE {{ fmtNum(repSummary.pe_next) }}</span></div>
+            <div class="cons-item"><span class="ck">后年</span><span class="cv">EPS {{ fmtNum(repSummary.eps_next2) }}</span><span class="ck2">PE {{ fmtNum(repSummary.pe_next2) }}</span></div>
+          </div>
+
+          <!-- 研报列表（点击展开正文） -->
+          <div class="rep-list">
+            <template v-for="r in reports" :key="r.info_code">
+              <div class="rep-row" :class="{ open: expanded === r.info_code }"
+                   @click="toggleReport(r.info_code)" title="点击查看研报内容">
+                <span class="rep-caret">{{ expanded === r.info_code ? '▾' : '▸' }}</span>
+                <span :class="['rep-rating', ratingCls(r.rating)]">{{ r.rating || '—' }}</span>
+                <span class="rep-title">{{ r.title }}</span>
+                <span class="rep-org">{{ r.org }}</span>
+                <span class="rep-tp" v-if="r.target_price">目标 {{ r.target_price }}</span>
+                <span class="rep-date mono">{{ r.publish_date }}</span>
+              </div>
+              <div v-if="expanded === r.info_code" class="rep-body">
+                <div v-if="reportText[r.info_code]?.loading" class="rep-body-loading">
+                  <span class="spinner"></span><span class="text-3">加载研报正文...</span>
+                </div>
+                <template v-else>
+                  <pre v-if="reportText[r.info_code]?.text" class="rep-text">{{ reportText[r.info_code].text }}</pre>
+                  <div v-else class="rep-body-empty text-3">未能提取该研报正文（东财反爬/无 PDF）。</div>
+                  <a class="rep-pdf-link" :href="reportText[r.info_code]?.pdf_url || pdfUrl(r.info_code)"
+                     target="_blank" rel="noopener">打开 PDF 原文 →</a>
+                </template>
+              </div>
+            </template>
+          </div>
+        </template>
+        <div v-else class="sec-empty">暂无机构研报覆盖</div>
+      </div>
+
       <!-- ── 4. 消息面 ─────────────────────────────────────────────────── -->
       <div class="section-block card">
         <div class="sec-title">消息面</div>
@@ -117,7 +185,7 @@
               <span class="ni-time">{{ item.date }}</span>
             </div>
             <div v-if="item._exp && item.url" class="ni-link">
-              <a :href="item.url" target="_blank" class="text-3" style="font-size:11px">查看原文 →</a>
+              <a :href="item.url" target="_blank" rel="noopener" class="text-3" style="font-size:11px">查看原文 →</a>
             </div>
           </div>
         </template>
@@ -148,7 +216,7 @@
               <tr v-for="h in fundamental.holders" :key="h.name+h.report_date">
                 <td class="td-ts">{{ h.report_date }}</td>
                 <td class="fw-600">{{ h.name }}</td>
-                <td><span class="type-chip">{{ h.type }}</span></td>
+                <td><span v-if="h.type" class="type-chip">{{ h.type }}</span></td>
                 <td class="mono">{{ h.shares ? (h.shares/10000).toFixed(0) : '-' }}</td>
                 <td class="mono">{{ h.pct?.toFixed(2) ?? '-' }}%</td>
                 <td :class="h.change?.includes('增') ? 'pos' : h.change?.includes('减') ? 'neg' : ''">{{ h.change }}</td>
@@ -179,12 +247,17 @@ const technical   = ref(null)
 const fundamental = ref(null)
 const newsItems   = ref([])
 const aiResult    = ref(null)
+const reports     = ref([])
+const repSummary  = ref(null)
+const expanded    = ref(null)   // 当前展开的研报 info_code
+const reportText  = ref({})     // info_code -> { loading, text, pdf_url }
 
 const loadingOverview = ref(false)
 const loadingTech     = ref(false)
 const loadingFund     = ref(false)
 const loadingNews     = ref(false)
 const loadingAI       = ref(false)
+const loadingReports  = ref(false)
 
 const signalText = { bullish: '多头趋势', bearish: '空头趋势', neutral: '震荡整理' }
 
@@ -249,13 +322,15 @@ async function loadAll(sym) {
   loadingOverview.value = true
   overview.value = null; technical.value = null; fundamental.value = null
   newsItems.value = []; aiResult.value = null
+  reports.value = []; repSummary.value = null
+  expanded.value = null; reportText.value = {}
   try {
     const res = await axios.get(`/api/stock-analysis/${sym}/overview`)
     overview.value = res.data
   } catch {}
   loadingOverview.value = false
   // Load all data in parallel, then auto-trigger AI
-  await Promise.all([loadTechnical(sym), loadFundamental(sym), loadNews(sym)])
+  await Promise.all([loadTechnical(sym), loadFundamental(sym), loadNews(sym), loadReports(sym)])
   runAI()
 }
 
@@ -284,12 +359,62 @@ async function runAI() {
   loadingAI.value = false
 }
 
+// 机构荐股（研报）：研报接口要纯 6 位代码，剥掉 SH/SZ/BJ 前后缀
+function plainCode(sym) {
+  return String(sym || '').toUpperCase().replace(/^(SH|SZ|BJ)/, '').replace(/\.(SH|SZ|BJ)$/, '')
+}
+async function loadReports(sym) {
+  const code = plainCode(sym)
+  loadingReports.value = true
+  try {
+    const [repRes, sumRes] = await Promise.all([
+      axios.get(`/api/research/reports/${code}`, { params: { page_size: 20 } }),
+      axios.get(`/api/research/summary/${code}`),
+    ])
+    reports.value = repRes.data.reports || []
+    repSummary.value = sumRes.data || null
+  } catch (e) {
+    reports.value = []; repSummary.value = null
+  }
+  loadingReports.value = false
+}
+
+async function toggleReport(infoCode) {
+  if (!infoCode) return
+  if (expanded.value === infoCode) { expanded.value = null; return }  // 收起
+  expanded.value = infoCode
+  if (reportText.value[infoCode]) return  // 已取过，复用缓存
+  reportText.value = { ...reportText.value, [infoCode]: { loading: true, text: '', pdf_url: pdfUrl(infoCode) } }
+  try {
+    const { data } = await axios.get(`/api/research/report-text/${infoCode}`)
+    reportText.value = { ...reportText.value, [infoCode]: { loading: false, text: data.text || '', pdf_url: data.pdf_url || pdfUrl(infoCode) } }
+  } catch {
+    reportText.value = { ...reportText.value, [infoCode]: { loading: false, text: '', pdf_url: pdfUrl(infoCode) } }
+  }
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────────
 function fmtPrice(v)   { return (v == null || v === 0) ? '-' : Number(v).toFixed(2) }
 function fmtChg(v)     { return v == null ? '-' : (v >= 0 ? '+' : '') + Number(v).toFixed(2) + '%' }
 function fmtAmount(v)  { if (!v) return '-'; return v >= 1e8 ? (v/1e8).toFixed(2)+'亿' : v >= 1e4 ? (v/1e4).toFixed(0)+'万' : String(v) }
 function fmtBillion(v) { return v ? (v/1e8).toFixed(1)+'亿' : '-' }
+function fmtNum(v)     { return (v == null || v === '') ? '-' : Number(v).toFixed(2) }
 function chgClass(v)   { return v == null ? '' : v > 0 ? 'pos' : v < 0 ? 'neg' : '' }
+
+// 研报相关 helper
+function pdfUrl(infoCode) { return `https://pdf.dfcfw.com/pdf/H3_${infoCode}_1.pdf` }
+function ratingCls(r) {
+  const s = String(r || '')
+  if (/买入|增持|强烈推荐|推荐|跑赢|outperform|buy/i.test(s)) return 'buy'
+  if (/卖出|减持|回避|跑输|underperform|sell/i.test(s)) return 'sell'
+  return 'hold'
+}
+// 一致目标价较当前价的上涨空间(%)
+function targetUpside(tp) {
+  const cur = overview.value?.price ?? overview.value?.yesterday_close
+  if (!cur || !tp) return null
+  return Math.round((tp / cur - 1) * 1000) / 10
+}
 function roeClass(v)   { return v == null ? '' : v > 15 ? 'pos' : v > 0 ? '' : 'neg' }
 const VERDICT_POS = new Set(['利好','看涨','低估','买入'])
 const VERDICT_NEG = new Set(['利空','看跌','高估','减仓'])
@@ -331,23 +456,70 @@ watch(() => props.symbol, sym => { if (sym) loadAll(sym) }, { immediate: true })
 
 /* ── Signal banner ── */
 .signal-banner { display: flex; align-items: center; gap: 14px; padding: 10px 18px; border-radius: var(--radius-md); border: 1px solid var(--border); flex-wrap: wrap; }
-.signal-banner.bullish { background: #16a34a18; border-color: #16a34a44; }
-.signal-banner.bearish { background: #ef444418; border-color: #ef444444; }
+/* A股语义：看多=红(涨)、看空=绿(跌) */
+.signal-banner.bullish { background: rgba(220,38,38,.08); border-color: rgba(220,38,38,.27); }
+.signal-banner.bearish { background: rgba(22,163,74,.08); border-color: rgba(22,163,74,.27); }
 .signal-banner.neutral { background: var(--bg-surface); }
 .signal-label { font-size: 10px; color: var(--text-3); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
 .signal-val { font-size: 14px; font-weight: 700; }
-.signal-banner.bullish .signal-val { color: var(--success); }
-.signal-banner.bearish .signal-val { color: var(--danger); }
+.signal-banner.bullish .signal-val { color: var(--up); }
+.signal-banner.bearish .signal-val { color: var(--down); }
 .signal-meta { font-size: 12px; color: var(--text-2); flex: 1; }
 .signal-chips { display: flex; gap: 6px; margin-left: auto; }
 .ind-chip { font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 10px; white-space: nowrap; }
 .ind-chip.neutral-chip { background: var(--bg-elevated); color: var(--text-2); }
 .ind-chip.overbought   { background: #ef444418; color: var(--danger); }
 .ind-chip.oversold     { background: #16a34a18; color: var(--success); }
-.ind-chip.golden  { background: #f59e0b22; color: #f59e0b; }
-.ind-chip.death   { background: #6b728022; color: #9ca3af; }
+.ind-chip.golden  { background: #f59e0b22; color: #d97706; }
+.ind-chip.death   { background: #6b728022; color: #94a3b8; }
 .ind-chip.macd-pos { background: #16a34a18; color: var(--success); }
 .ind-chip.macd-neg { background: #ef444418; color: var(--danger); }
+
+/* ── 机构荐股 ── */
+.rep-sub { font-size: 11px; }
+.rep-toprating { font-size: 12px; font-weight: 700; padding: 2px 10px; border-radius: 6px; }
+.rep-toprating.buy  { color: var(--up, #f5394c); background: rgba(245,57,76,0.14); }
+.rep-toprating.sell { color: var(--down, #20b26c); background: rgba(32,178,108,0.14); }
+.rep-toprating.hold { color: var(--text-2); background: var(--bg-base); }
+.rating-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+.rating-chip { font-size: 12px; color: var(--text-2); background: var(--bg-base); border: 1px solid var(--border); border-radius: 12px; padding: 2px 10px; }
+.rating-chip.buy  { color: var(--up, #f5394c); border-color: rgba(245,57,76,0.4); }
+.rating-chip.sell { color: var(--down, #20b26c); border-color: rgba(32,178,108,0.4); }
+.rating-chip b { margin-left: 2px; }
+
+.rep-targets { display: flex; flex-wrap: wrap; gap: 10px; margin: 10px 0; }
+.rt-item { background: var(--bg-elevated, var(--bg-base)); border-radius: var(--radius-sm); padding: 7px 12px; min-width: 76px; }
+.rt-lbl { display: block; font-size: 10px; color: var(--text-3); margin-bottom: 3px; }
+.rt-val { font-size: 15px; font-weight: 700; font-family: var(--font-mono); color: var(--text-1); }
+.rt-avg { background: rgba(99,102,241,0.1); border: 1px solid rgba(99,102,241,0.25); }
+.rt-up { font-size: 12px; font-weight: 600; margin-left: 6px; }
+.rt-up.pos { color: var(--up, #f5394c); }
+.rt-up.neg { color: var(--down, #20b26c); }
+
+.consensus { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.cons-item { display: flex; align-items: center; gap: 8px; background: var(--bg-base); border-radius: var(--radius-sm); padding: 5px 12px; font-size: 12px; }
+.cons-item .ck { color: var(--text-3); }
+.cons-item .cv { color: var(--text-1); font-weight: 600; }
+.cons-item .ck2 { color: var(--text-2); }
+
+.rep-list { display: flex; flex-direction: column; margin-top: 6px; }
+.rep-row { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-top: 1px solid var(--border); text-decoration: none; font-size: 12px; cursor: pointer; }
+.rep-row:hover { background: var(--bg-hover); }
+.rep-row.open .rep-title { color: var(--accent, #6366f1); }
+.rep-caret { flex-shrink: 0; color: var(--text-3); font-size: 10px; width: 11px; }
+.rep-body { padding: 4px 0 10px 19px; border-bottom: 1px dashed var(--border); }
+.rep-body-loading { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 12px; }
+.rep-body-empty { font-size: 12px; padding: 6px 0; }
+.rep-text { white-space: pre-wrap; word-break: break-word; font-family: inherit; font-size: 12px; line-height: 1.7; color: var(--text-2); max-height: 400px; overflow-y: auto; margin: 0 0 8px; padding: 10px 12px; background: var(--bg-base); border-radius: var(--radius-sm); }
+.rep-pdf-link { font-size: 12px; color: var(--accent, #6366f1); text-decoration: none; }
+.rep-pdf-link:hover { text-decoration: underline; }
+.rep-rating { flex-shrink: 0; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 5px; color: var(--text-2); background: var(--bg-base); min-width: 36px; text-align: center; }
+.rep-rating.buy  { color: var(--up, #f5394c); background: rgba(245,57,76,0.12); }
+.rep-rating.sell { color: var(--down, #20b26c); background: rgba(32,178,108,0.12); }
+.rep-title { flex: 1; color: var(--text-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rep-org { color: var(--text-3); white-space: nowrap; }
+.rep-tp { color: var(--accent, #6366f1); white-space: nowrap; }
+.rep-date { color: var(--text-3); white-space: nowrap; font-size: 11px; }
 
 /* ── Section blocks ── */
 .section-block { padding: 16px 18px; }
@@ -385,14 +557,14 @@ watch(() => props.symbol, sym => { if (sym) loadAll(sym) }, { immediate: true })
 .sb-item  { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 36px; }
 .sb-count { font-size: 18px; font-weight: 700; font-family: var(--font-mono); }
 .sb-lbl   { font-size: 10px; color: var(--text-3); }
-.sb-pos .sb-count { color: #ef4444; }
+.sb-pos .sb-count { color: #dc2626; }
 .sb-neu .sb-count { color: var(--text-3); }
-.sb-neg .sb-count { color: #22c55e; }
+.sb-neg .sb-count { color: #16a34a; }
 .sb-track { flex: 1; height: 8px; border-radius: 4px; overflow: hidden; display: flex; gap: 2px; background: var(--bg-card); }
 .sb-seg   { height: 100%; border-radius: 4px; transition: flex 0.3s; min-width: 4px; }
-.seg-pos  { background: #ef4444; }
-.seg-neu  { background: #6b7280; }
-.seg-neg  { background: #22c55e; }
+.seg-pos  { background: #dc2626; }
+.seg-neu  { background: #64748b; }
+.seg-neg  { background: #16a34a; }
 .sb-total { font-size: 11px; color: var(--text-3); white-space: nowrap; }
 
 /* ── News AI ── */
@@ -424,8 +596,8 @@ watch(() => props.symbol, sym => { if (sym) loadAll(sym) }, { immediate: true })
 .ni-time  { font-size: 11px; color: var(--text-3); flex-shrink: 0; white-space: nowrap; }
 .ni-link  { padding-left: 15px; margin-top: 4px; }
 .sdot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; margin-top: 5px; }
-.sdot.positive { background: #ef4444; }
-.sdot.negative { background: #22c55e; }
+.sdot.positive { background: #dc2626; }
+.sdot.negative { background: #16a34a; }
 .sdot.neutral  { background: var(--text-3); }
 
 /* ── AI section ── */
@@ -435,13 +607,14 @@ watch(() => props.symbol, sym => { if (sym) loadAll(sym) }, { immediate: true })
   padding: 8px 16px; border-radius: var(--radius-md);
   border: 1px solid var(--border); min-width: 72px;
 }
-.vd-pos { background: #16a34a14; border-color: #16a34a44; }
-.vd-neg { background: #ef444414; border-color: #ef444444; }
+/* A股语义：利好/看涨=红、利空/看跌=绿 */
+.vd-pos { background: rgba(220,38,38,.08); border-color: rgba(220,38,38,.27); }
+.vd-neg { background: rgba(22,163,74,.08); border-color: rgba(22,163,74,.27); }
 .vd-neu { background: var(--bg-elevated); }
 .vd-dim { font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; }
 .vd-val { font-size: 14px; font-weight: 700; }
-.vd-pos .vd-val { color: var(--success); }
-.vd-neg .vd-val { color: var(--danger); }
+.vd-pos .vd-val { color: var(--up); }
+.vd-neg .vd-val { color: var(--down); }
 .vd-neu .vd-val { color: var(--text-2); }
 
 .ai-result-body { display: flex; flex-direction: column; gap: 10px; }

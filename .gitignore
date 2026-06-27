@@ -42,5 +42,28 @@ htmlcov/
 web/node_modules/
 web/dist/
 
+# 前端本地缓存(研报PDF/快照/cache.db),纯本地、绝不入库(部署也不传)
+web/data/
+web/src/data/
+
 # Local Netlify folder
 .netlify
+
+# 本地数据库文件（缓存库，体积大且随机器变化）
+data/*.db
+data/*.db-shm
+data/*.db-wal
+
+# 敏感数据（含用户密码哈希、账户信息、本地交易状态，不得入库）
+data/users.json
+data/accounts.json
+data/paper_state.json
+# JWT 签名密钥（缺省 QF_JWT_SECRET 时自动落盘，每机一份，不得入库/同步）
+data/.jwt_secret
+
+# 根目录一次性临时脚本（部署/调试残留）
+/_*.py
+
+# 根目录临时产物（探测输出、验证结果等）
+/_*.json
+/all_skus.txt

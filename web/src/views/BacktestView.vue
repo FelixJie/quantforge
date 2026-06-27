@@ -138,8 +138,8 @@
         <div class="chart-hd">
           <span class="chart-title">{{ symbolList[0] }} · K线 + 交易信号</span>
           <div class="chart-legend">
-            <span class="leg"><i class="leg-dot" style="background:#ef4444"></i>开仓买入</span>
-            <span class="leg"><i class="leg-dot" style="background:#22c55e"></i>平仓卖出</span>
+            <span class="leg"><i class="leg-dot" style="background:#dc2626"></i>开仓买入</span>
+            <span class="leg"><i class="leg-dot" style="background:#16a34a"></i>平仓卖出</span>
           </div>
         </div>
         <v-chart :option="klineOpt" autoresize style="height:500px" />
@@ -162,7 +162,7 @@
 
       <!-- Report -->
       <div v-if="job.status==='done' && job.has_report" class="card info-row">
-        <a :href="`/api/optimizer/report/${job.job_id}`" target="_blank" class="report-link">
+        <a :href="`/api/backtest/report/${job.job_id}`" target="_blank" rel="noopener" class="report-link">
           查看完整回测报告（含月度热力图）→
         </a>
       </div>
@@ -181,6 +181,7 @@
 </template>
 
 <script setup>
+import VChart from '../charts'
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from 'axios'
@@ -309,17 +310,17 @@ const klineOpt = computed(() => {
       markData.push({
         coord: [bi, bars[bi].low],
         symbol: 'triangle', symbolSize: 14, symbolRotate: 0,
-        itemStyle: { color: '#ef4444' },
+        itemStyle: { color: '#dc2626' },
         label: {
           show: true, position: 'bottom', lineHeight: 14,
           formatter: `开多\n${rt.entry_price}`,
-          color: '#ef4444', fontSize: 9, fontWeight: 700,
+          color: '#dc2626', fontSize: 9, fontWeight: 700,
         },
       })
     }
     if (si >= 0 && bars[si]) {
       const sign = rt.pnl_pct >= 0 ? '+' : ''
-      const clr  = rt.pnl_pct >= 0 ? '#22c55e' : '#f87171'
+      const clr  = rt.pnl_pct >= 0 ? '#16a34a' : '#dc2626'
       markData.push({
         coord: [si, bars[si].high],
         symbol: 'triangle', symbolSize: 14, symbolRotate: 180,
@@ -339,16 +340,16 @@ const klineOpt = computed(() => {
     backgroundColor: 'transparent', animation: false,
     tooltip: {
       trigger: 'axis',
-      axisPointer: { type: 'cross', crossStyle: { color: '#374151' } },
-      backgroundColor: '#1e2537', borderColor: '#2d3748',
-      textStyle: { color: '#e2e8f0', fontSize: 12 },
+      axisPointer: { type: 'cross', crossStyle: { color: '#e2e8f0' } },
+      backgroundColor: '#ffffff', borderColor: '#e2e8f0',
+      textStyle: { color: '#1e293b', fontSize: 12 },
       formatter: params => {
         const k = params.find(p => p.seriesName === 'K')
         const v = params.find(p => p.seriesName === 'Vol')
         if (!k) return ''
         const [o, c, lo, h] = k.data
         const chg = ((c - o) / o * 100).toFixed(2)
-        const col = c >= o ? '#ef4444' : '#22c55e'
+        const col = c >= o ? '#dc2626' : '#16a34a'
         return `<b>${k.name}</b><br/>
           开 ${o} &nbsp; 收 <span style="color:${col};font-weight:700">${c}</span><br/>
           高 ${h} &nbsp; 低 ${lo}<br/>
@@ -362,7 +363,7 @@ const klineOpt = computed(() => {
       { type: 'slider', xAxisIndex: [0,1], height: 20, bottom: 2,
         startValue: startVal, endValue: n - 1,
         borderColor: 'transparent', fillerColor: 'rgba(59,130,246,0.15)',
-        handleStyle: { color: '#3b82f6' }, textStyle: { color: '#6b7280' } },
+        handleStyle: { color: '#2563eb' }, textStyle: { color: '#64748b' } },
     ],
     grid: [
       { top: 16, left: 68, right: 16, bottom: 92 },
@@ -370,25 +371,25 @@ const klineOpt = computed(() => {
     ],
     xAxis: [
       { type: 'category', data: dates, gridIndex: 0, boundaryGap: true,
-        axisLine: { lineStyle: { color: '#1f2937' } }, axisLabel: { show: false } },
+        axisLine: { lineStyle: { color: '#ffffff' } }, axisLabel: { show: false } },
       { type: 'category', data: dates, gridIndex: 1, boundaryGap: true,
-        axisLine: { lineStyle: { color: '#1f2937' } },
-        axisLabel: { color: '#6b7280', fontSize: 10,
+        axisLine: { lineStyle: { color: '#ffffff' } },
+        axisLabel: { color: '#64748b', fontSize: 10,
           interval: Math.max(0, Math.floor(n / 6) - 1) } },
     ],
     yAxis: [
       { type: 'value', scale: true, gridIndex: 0,
-        splitLine: { lineStyle: { color: '#1f2937', type: 'dashed' } },
-        axisLabel: { color: '#9ca3af', fontSize: 10 }, axisLine: { show: false } },
+        splitLine: { lineStyle: { color: '#ffffff', type: 'dashed' } },
+        axisLabel: { color: '#94a3b8', fontSize: 10 }, axisLine: { show: false } },
       { type: 'value', gridIndex: 1, splitNumber: 2, splitLine: { show: false },
-        axisLabel: { color: '#6b7280', fontSize: 9,
+        axisLabel: { color: '#64748b', fontSize: 9,
           formatter: v => v >= 1e8 ? (v/1e8).toFixed(0)+'亿' : v >= 1e4 ? (v/1e4).toFixed(0)+'万' : v } },
     ],
     series: [
       {
         name: 'K', type: 'candlestick', xAxisIndex: 0, yAxisIndex: 0,
         data: candles,
-        itemStyle: { color: '#ef4444', color0: '#22c55e', borderColor: '#ef4444', borderColor0: '#22c55e' },
+        itemStyle: { color: '#dc2626', color0: '#16a34a', borderColor: '#dc2626', borderColor0: '#16a34a' },
         markPoint: { data: markData },
       },
       {
@@ -410,11 +411,11 @@ const equityOpt = computed(() => {
     backgroundColor: 'transparent', animation: false,
     tooltip: { trigger: 'axis', formatter: p => `${p[0].name}<br/>¥${p[0].value?.toLocaleString()}` },
     grid: { left: 72, right: 16, top: 10, bottom: 28 },
-    xAxis: { type: 'category', data: ec.map(d => d.date), axisLabel: { color: '#4b5563', fontSize: 10 }, axisLine: { lineStyle: { color: '#1f2937' } } },
-    yAxis: { type: 'value', axisLabel: { color: '#4b5563', fontSize: 10, formatter: v => '¥'+(v/1e4).toFixed(0)+'w' }, splitLine: { lineStyle: { color: '#111827' } } },
+    xAxis: { type: 'category', data: ec.map(d => d.date), axisLabel: { color: '#cbd5e1', fontSize: 10 }, axisLine: { lineStyle: { color: '#ffffff' } } },
+    yAxis: { type: 'value', axisLabel: { color: '#cbd5e1', fontSize: 10, formatter: v => '¥'+(v/1e4).toFixed(0)+'w' }, splitLine: { lineStyle: { color: '#f5f7fa' } } },
     series: [{
       type: 'line', data: ec.map(d => d.equity), smooth: true, symbol: 'none',
-      lineStyle: { color: isPos ? '#3b82f6' : '#f87171', width: 2 },
+      lineStyle: { color: isPos ? '#2563eb' : '#dc2626', width: 2 },
       areaStyle: { color: { type: 'linear', x:0, y:0, x2:0, y2:1, colorStops: [
         { offset: 0, color: isPos ? 'rgba(59,130,246,0.2)' : 'rgba(248,113,113,0.2)' },
         { offset: 1, color: 'rgba(0,0,0,0)' },
@@ -572,7 +573,7 @@ onUnmounted(() => {
 .sym-drop {
   position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 50;
   background: var(--bg-card); border: 1px solid var(--border);
-  border-radius: var(--radius-md); box-shadow: 0 8px 28px rgba(0,0,0,0.3);
+  border-radius: var(--radius-md); box-shadow: 0 8px 28px rgba(15,23,42,0.12);
   max-height: 260px; overflow-y: auto;
 }
 .drop-row {
@@ -584,10 +585,10 @@ onUnmounted(() => {
 .drop-row:hover { background: var(--bg-hover); }
 .dr-code { font-family: var(--font-mono); font-size: 13px; font-weight: 700; color: var(--accent); min-width: 52px; }
 .dr-name { flex: 1; font-size: 13px; color: var(--text-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dr-tag { font-size: 10px; background: #16a34a22; color: #4ade80; padding: 1px 5px; border-radius: 3px; white-space: nowrap; }
+.dr-tag { font-size: 10px; background: #16a34a22; color: #16a34a; padding: 1px 5px; border-radius: 3px; white-space: nowrap; }
 .dr-mkt  { font-size: 10px; color: var(--text-3); font-family: var(--font-mono); }
 .dr-date { font-size: 10px; color: var(--text-3); font-family: var(--font-mono); margin-left: auto; margin-right: 4px; }
-.ai-tag  { background: #4338ca22; color: #818cf8; }
+.ai-tag  { background: #4338ca22; color: #6366f1; }
 .drop-section-label {
   padding: 6px 12px 4px;
   font-size: 10px; font-weight: 700; color: var(--text-3);
@@ -646,8 +647,8 @@ onUnmounted(() => {
 
 /* Info/error */
 .info-row { display: flex; align-items: center; gap: 10px; padding: 14px 16px; }
-.err-box { background: #1e1010; border: 1px solid #7f1d1d; border-radius: var(--radius-md); padding: 14px 16px; }
-.err-msg { font-size: 13px; color: #fca5a5; }
+.err-box { background: #fef2f2; border: 1px solid #7f1d1d; border-radius: var(--radius-md); padding: 14px 16px; }
+.err-msg { font-size: 13px; color: #dc2626; }
 .dl-msg { font-size: 12px; color: var(--text-2); margin-top: 6px; display: flex; align-items: center; gap: 6px; }
 .report-link { color: var(--accent); font-size: 13px; text-decoration: none; }
 .report-link:hover { text-decoration: underline; }

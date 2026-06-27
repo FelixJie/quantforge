@@ -10,10 +10,19 @@ export const useWatchlistStore = defineStore('watchlist', () => {
   const watchlistVerifications = ref([])
   // 实时行情数据
   const realtimeData = ref({})
+  // 主力资金流(单独异步拉取，push2 间歇失败不阻塞主行情)；字段并入 realtimeData 供列/排序复用
+  const fundFlowData = ref({})
+  // AI 诊断评分(按需触发，code -> {score,rating,comment,asof})
+  const aiDiag = ref({})
+  const aiDiagLoading = ref(false)
   // 迷你图表数据
   const miniChartData = ref({})
-  // 上证指数数据
+  // 迷你图昨收基准价(分时图基准线/着色)
+  const miniChartPre = ref({})
+  // 上证指数数据（兼容旧用法）
   const shIndex = ref(null)
+  // 主要指数（上证/深成/创业板 等）— 顶部指数条
+  const indices = ref([])
 
   const loading = ref(false)
   const searching = ref(false)
@@ -26,6 +35,32 @@ export const useWatchlistStore = defineStore('watchlist', () => {
   let _autoTimer = null
 
   const auth = useAuthStore()
+
+  // ── 手动排序持久化（按账户存 localStorage，避免后端迁移）─────────────────
+  function _orderKey() { return `wl_order_${auth.user?.id || 'anon'}` }
+  function _loadOrder() {
+    try { return JSON.parse(localStorage.getItem(_orderKey()) || '[]') } catch { return [] }
+  }
+  function _saveOrder(codes) {
+    try { localStorage.setItem(_orderKey(), JSON.stringify(codes)) } catch { /* ignore */ }
+  }
+  function _persistCurrentOrder() { _saveOrder(watchlist.value.map(s => s.code)) }
+  function _applyOrder() {
+    const order = _loadOrder()
+    if (!order.length) return
+    const idx = new Map(order.map((c, i) => [c, i]))
+    watchlist.value.sort((a, b) =>
+      (idx.has(a.code) ? idx.get(a.code) : Infinity) -
+      (idx.has(b.code) ? idx.get(b.code) : Infinity))
+  }
+  // 按给定 code 顺序重排并持久化
+  function reorderWatchlist(codes) {
+    const pos = new Map(codes.map((c, i) => [c, i]))
+    watchlist.value.sort((a, b) =>
+      (pos.has(a.code) ? pos.get(a.code) : Infinity) -
+      (pos.has(b.code) ? pos.get(b.code) : Infinity))
+    _persistCurrentOrder()
+  }
 
   // ── 验证记录（服务端按账户存储）─────────────────────────────────────────
   async function loadVerifications() {
@@ -51,6 +86,8 @@ export const useWatchlistStore = defineStore('watchlist', () => {
       watchlist.value = items.map(it => ({
         code: it.code, name: it.name, added_at: it.added_at,
         notes: it.notes || '', tags: it.tags || [],
+        color: it.color || '', cost_price: it.cost_price ?? null, shares: it.shares ?? null,
+        reports: it.reports || null,
       }))
       // 同步实时行情
       const rt = {}
@@ -58,13 +95,19 @@ export const useWatchlistStore = defineStore('watchlist', () => {
         if (it.price != null || it.change_pct != null) {
           rt[it.code] = {
             price: it.price, change_pct: it.change_pct, change: it.change,
-            high: it.high, low: it.low, pre_close: it.pre_close,
+            open: it.open, high: it.high, low: it.low, pre_close: it.pre_close,
             turnover: it.turnover, pe: it.pe, pb: it.pb,
             turnover_rate: it.turnover_rate,
+            amplitude: it.amplitude, vol_ratio: it.vol_ratio,
+            market_cap: it.market_cap, float_market_cap: it.float_market_cap,
+            limit_up: it.limit_up, limit_down: it.limit_down,
+            // 资金流字段(上一轮已拉到的，避免轮询覆盖后丢失)
+            ...(fundFlowData.value[it.code] || {}),
           }
         }
       }
       realtimeData.value = rt
+      _applyOrder()
       loaded.value = true
     } catch (e) {
       if (e.response?.status !== 401) console.error('Failed to load watchlist:', e)
@@ -82,6 +125,7 @@ export const useWatchlistStore = defineStore('watchlist', () => {
         code: stock.code, name: stock.name || stock.code,
         added_at: new Date().toISOString(), notes: '', tags: [],
       })
+      _persistCurrentOrder()
       searchResults.value = []
       return true
     } catch (e) {
@@ -101,6 +145,20 @@ export const useWatchlistStore = defineStore('watchlist', () => {
     }
     watchlist.value = watchlist.value.filter(s => s.code !== code)
     delete realtimeData.value[code]
+    _persistCurrentOrder()
+  }
+
+  // 批量移除（用于多选删除）
+  async function batchRemove(codes) {
+    const set = new Set(codes)
+    await Promise.all([...set].map(c =>
+      axios.delete(`/api/watchlist/${c}`).catch(e => {
+        if (e.response?.status !== 404) console.error('batch remove failed:', c, e)
+      })
+    ))
+    watchlist.value = watchlist.value.filter(s => !set.has(s.code))
+    set.forEach(c => delete realtimeData.value[c])
+    _persistCurrentOrder()
   }
 
   function isInWatchlist(code) {
@@ -127,6 +185,34 @@ export const useWatchlistStore = defineStore('watchlist', () => {
       return true
     } catch (e) {
       console.error('Failed to set tags:', e)
+      return false
+    }
+  }
+
+  // 单只标色（'' 清除）
+  async function setColor(code, color) {
+    try {
+      const res = await axios.put(`/api/watchlist/${code}/color`, { color: color || '' })
+      const item = watchlist.value.find(s => s.code === code)
+      if (item) item.color = res.data.item.color || ''
+      return true
+    } catch (e) {
+      console.error('Failed to set color:', e)
+      return false
+    }
+  }
+
+  // 持仓成本/股数（都为空则清空持仓）
+  async function setHolding(code, costPrice, shares) {
+    try {
+      const res = await axios.put(`/api/watchlist/${code}/holding`, {
+        cost_price: costPrice ?? null, shares: shares ?? null,
+      })
+      const item = watchlist.value.find(s => s.code === code)
+      if (item) { item.cost_price = res.data.item.cost_price ?? null; item.shares = res.data.item.shares ?? null }
+      return true
+    } catch (e) {
+      console.error('Failed to set holding:', e)
       return false
     }
   }
@@ -261,11 +347,12 @@ export const useWatchlistStore = defineStore('watchlist', () => {
   async function fetchShIndex() {
     try {
       const response = await axios.get('/api/market/indices')
-      const indices = response.data.indices || []
-      const sh = indices.find(idx => idx.code === '000001' || idx.name.includes('上证'))
+      const list = response.data.indices || []
+      indices.value = list
+      const sh = list.find(idx => idx.code === '000001' || idx.name.includes('上证'))
       if (sh) shIndex.value = sh
     } catch (e) {
-      console.error('Failed to fetch SH index:', e)
+      console.error('Failed to fetch indices:', e)
     }
   }
 
@@ -274,31 +361,79 @@ export const useWatchlistStore = defineStore('watchlist', () => {
     await loadWatchlist()
   }
 
+  // 分时点 → 迷你图通用结构(复用 close 字段，前端绘制无需区分日/分时)
+  function _normalizeMinute(points) {
+    return (points || []).map(p => ({
+      datetime: p.time, close: parseFloat(p.close), avg: p.avg,
+    })).filter(p => Number.isFinite(p.close))
+  }
+
+  // 单只迷你走势图 — 当日分时(腾讯→东财→新浪三级回退)
   async function fetchMiniChartData(code) {
     try {
-      const endDate = new Date()
-      const startDate = new Date(endDate.getTime() - 90 * 24 * 60 * 60 * 1000)
-      const response = await axios.get('/api/market/history', {
-        params: {
-          symbol: code,
-          start: startDate.toISOString().split('T')[0],
-          end: endDate.toISOString().split('T')[0],
-        },
-      })
-      if (response.data && response.data.length > 0) {
-        miniChartData.value[code] = response.data.map(item => ({
-          datetime: item.datetime, open: parseFloat(item.open), close: parseFloat(item.close),
-          high: parseFloat(item.high), low: parseFloat(item.low), volume: item.volume,
-        }))
-      }
+      const { data } = await axios.get(`/api/market/minute/${code}`)
+      const pts = _normalizeMinute(data.points)
+      if (pts.length) miniChartData.value[code] = pts
+      if (data.pre_close != null) miniChartPre.value[code] = data.pre_close
     } catch (e) {
       console.error(`Failed to fetch mini chart for ${code}:`, e)
     }
   }
 
-  async function fetchAllMiniChartData() {
-    for (const stock of watchlist.value) {
-      await fetchMiniChartData(stock.code)
+  // 批量拉取迷你图 — 当日分时批量接口；默认跳过已加载的(force 时盘中重取)
+  async function fetchAllMiniChartData(force = false) {
+    const codes = watchlist.value
+      .map(s => s.code)
+      .filter(c => force || !(miniChartData.value[c]?.length))
+    if (!codes.length) return
+    try {
+      const { data } = await axios.post('/api/market/minute-batch', { codes })
+      const map = data.data || {}
+      const pre = data.pre_close || {}
+      const next = { ...miniChartData.value }
+      const nextPre = { ...miniChartPre.value }
+      for (const code of Object.keys(map)) {
+        const pts = _normalizeMinute(map[code])
+        if (pts.length) next[code] = pts
+        if (pre[code] != null) nextPre[code] = pre[code]
+      }
+      miniChartData.value = next
+      miniChartPre.value = nextPre
+    } catch (e) {
+      console.error('Failed to batch-fetch minute charts:', e)
+    }
+  }
+
+  // 主力资金流：单独 POST 拉取，合并进 realtimeData(让列/排序直接用)；失败静默
+  async function fetchFundFlow() {
+    const codes = watchlist.value.map(s => s.code)
+    if (!codes.length) return
+    try {
+      const { data } = await axios.post('/api/market/fund-flow', { codes })
+      const map = data.data || {}
+      fundFlowData.value = map
+      const next = { ...realtimeData.value }
+      for (const code of Object.keys(map)) {
+        next[code] = { ...(next[code] || {}), ...map[code] }
+      }
+      realtimeData.value = next
+    } catch (e) {
+      console.error('Failed to fetch fund flow:', e)
+    }
+  }
+
+  // AI 诊断：按需触发(成本较高)，后端批量一次 LLM + 落库 6h 缓存
+  async function fetchAiDiagnose(force = false) {
+    const codes = watchlist.value.map(s => s.code)
+    if (!codes.length || aiDiagLoading.value) return
+    aiDiagLoading.value = true
+    try {
+      const { data } = await axios.post('/api/watchlist/ai-diagnose', { codes, force })
+      aiDiag.value = { ...aiDiag.value, ...(data.data || {}) }
+    } catch (e) {
+      console.error('Failed to fetch AI diagnose:', e)
+    } finally {
+      aiDiagLoading.value = false
     }
   }
 
@@ -324,13 +459,13 @@ export const useWatchlistStore = defineStore('watchlist', () => {
   loadTags()
 
   return {
-    watchlist, watchlistVerifications, realtimeData, miniChartData, shIndex, tags,
+    watchlist, watchlistVerifications, realtimeData, fundFlowData, aiDiag, aiDiagLoading, miniChartData, miniChartPre, shIndex, indices, tags,
     loading, searching, refreshing, error, searchResults, loaded,
-    loadWatchlist, loadVerifications, loadTags, setTags, updateNotes,
+    loadWatchlist, loadVerifications, loadTags, setTags, setColor, setHolding, updateNotes,
     startAutoRefresh, stopAutoRefresh,
-    searchStock, addToWatchlist, removeFromWatchlist, isInWatchlist,
+    searchStock, addToWatchlist, removeFromWatchlist, batchRemove, reorderWatchlist, isInWatchlist,
     addVerification, removeVerification, fetchStockInfo, verifyWatchlist,
-    fetchShIndex, fetchRealtimeData, fetchMiniChartData, fetchAllMiniChartData,
+    fetchShIndex, fetchRealtimeData, fetchMiniChartData, fetchAllMiniChartData, fetchFundFlow, fetchAiDiagnose,
     getStockInfo, refreshAll, loadFromStorage, saveToStorage,
   }
 })

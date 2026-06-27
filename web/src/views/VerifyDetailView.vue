@@ -10,6 +10,7 @@
       <div class="vd-spacer"></div>
       <div class="vd-header-meta">
         <div class="hm-item"><span class="hm-lbl">预测日期</span><span class="hm-val">{{ pred.date }}</span></div>
+        <div class="hm-item"><span class="hm-lbl">荐股类型</span><span :class="['ps-badge', 'ps-' + (pred.pick_strategy || 'momentum')]">{{ pickStratLabel(pred.pick_strategy) }}</span></div>
         <div class="hm-item"><span class="hm-lbl">策略</span><span class="hm-val">{{ pred.strategy_name || pred.strategy || '-' }}</span></div>
         <div class="hm-item"><span class="hm-lbl">置信度</span><span class="hm-val">{{ pred.confidence }}%</span></div>
         <div class="hm-item"><span class="hm-lbl">风险</span><span :class="['risk-badge', 'r-' + (pred.risk_level||'中')]">{{ pred.risk_level || '-' }}</span></div>
@@ -51,8 +52,8 @@
       <!-- Status + dates -->
       <div class="sb-main">
         <div :class="['sb-badge', 'sbb-' + finalStatus]">
-          <span class="sbb-icon">{{ { target:'✓', stop:'✗', open:'◷' }[finalStatus] }}</span>
-          {{ { target:'已达目标', stop:'已止损', open:'进行中' }[finalStatus] }}
+          <span class="sbb-icon">{{ { target:'✓', stop:'✗', closed:'●', open:'◷' }[finalStatus] }}</span>
+          {{ { target:'已达目标', stop:'已止损', closed:'已结算', open:'进行中' }[finalStatus] }}
         </div>
         <div class="sb-dates">
           <span>买入日 <b>{{ entryDate || '-' }}</b></span>
@@ -67,6 +68,10 @@
           {{ finalReturn >= 0 ? '+' : '' }}{{ finalReturn.toFixed(2) }}%
         </div>
         <div class="sb-pct-lbl">{{ finalStatus === 'open' ? '当前收益' : '最终收益' }}</div>
+        <div v-if="benchChangePct != null" class="sb-bench">
+          沪深300 <b :class="benchChangePct >= 0 ? 'pos' : 'neg'">{{ benchChangePct >= 0 ? '+' : '' }}{{ benchChangePct.toFixed(2) }}%</b>
+          <span class="sb-excess">超额 <b :class="(finalReturn - benchChangePct) >= 0 ? 'pos' : 'neg'">{{ (finalReturn - benchChangePct) >= 0 ? '+' : '' }}{{ (finalReturn - benchChangePct).toFixed(2) }}%</b></span>
+        </div>
       </div>
 
       <!-- Price targets -->
@@ -103,10 +108,10 @@
         <span class="chart-title">K线走势（推荐前后上下文）</span>
         <div style="display:flex;align-items:center;gap:14px">
           <div class="chart-legend" v-if="actualBuyPrice">
-            <span class="leg-item"><i class="leg-dash" style="border-color:#fbbf24"></i>推荐日</span>
-            <span class="leg-item"><i class="leg-dash" style="border-color:#9ca3af"></i>买入 {{ actualBuyPrice }}</span>
-            <span class="leg-item"><i class="leg-dash" style="border-color:#22c55e"></i>目标 {{ pred.target_price }}</span>
-            <span class="leg-item"><i class="leg-dash" style="border-color:#ef4444"></i>止损 {{ pred.stop_price }}</span>
+            <span class="leg-item"><i class="leg-dash" style="border-color:#b45309"></i>推荐日</span>
+            <span class="leg-item"><i class="leg-dash" style="border-color:#94a3b8"></i>买入 {{ actualBuyPrice }}</span>
+            <span class="leg-item"><i class="leg-dash" style="border-color:#16a34a"></i>目标 {{ pred.target_price }}</span>
+            <span class="leg-item"><i class="leg-dash" style="border-color:#dc2626"></i>止损 {{ pred.stop_price }}</span>
           </div>
           <span style="font-size:10px;color:var(--accent)">点击K线查看分时</span>
         </div>
@@ -141,7 +146,7 @@
         </template>
         <div v-else class="iday-empty">
           <div>该日分时数据暂未缓存</div>
-          <div style="font-size:11px;margin-top:6px;color:#4b5563">系统将在后台自动获取，稍后重试</div>
+          <div style="font-size:11px;margin-top:6px;color:#94a3b8">系统将在后台自动获取，稍后重试</div>
         </div>
       </div>
     </div>
@@ -179,6 +184,7 @@
               <td>
                 <span v-if="b.tradeStatus === 'target'" class="status-chip st-hit">达目标</span>
                 <span v-else-if="b.tradeStatus === 'stop'" class="status-chip st-stp">触止损</span>
+                <span v-else-if="b.tradeStatus === 'sell'" class="status-chip st-sell">{{ b.isAfterLock ? '次日开盘卖出' : '动能卖点' }}</span>
                 <span v-else class="status-chip st-open">持仓中</span>
               </td>
             </tr>
@@ -194,12 +200,16 @@
 </template>
 
 <script setup>
+import VChart from '../charts'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from 'axios'
 import StockAnalysisPanel from '../components/StockAnalysisPanel.vue'
 
 const route = useRoute()
+
+const PICK_STRAT_CN = { momentum: '动能买点', pring: '普林格KST周期' }
+function pickStratLabel(s) { return PICK_STRAT_CN[s] || PICK_STRAT_CN.momentum }
 
 const pred           = ref({})
 const stockOverview  = ref(null)
@@ -208,9 +218,11 @@ const allContextBars = ref([])   // broader set including pre-prediction context
 const loadingChart   = ref(false)
 const entryDate      = ref('')
 const triggerDate    = ref(null)
-const finalStatus    = ref('open')
+const finalStatus    = ref('open')   // 'target' | 'stop' | 'closed' | 'open'
 const finalReturn    = ref(0)
 const actualBuyPrice = ref(null)
+const benchChangePct = ref(null)     // 同期沪深300（基准对比）
+const holdDaysBk     = ref(null)     // 后端结算的持仓交易日数
 
 // Intraday
 const intradayDate    = ref(null)
@@ -220,6 +232,7 @@ const loadingIntraday = ref(false)
 // ── Derived ────────────────────────────────────────────────────────────────────
 const currentPrice = computed(() => detailBars.value[detailBars.value.length - 1]?.close ?? actualBuyPrice.value)
 const holdDays     = computed(() => {
+  if (holdDaysBk.value != null) return holdDaysBk.value
   const activeBars = detailBars.value.filter(b => !b.isAfterLock)
   return activeBars.length || detailBars.value.length
 })
@@ -231,9 +244,9 @@ const progressStyle = computed(() => {
   const stp = pred.value.stop_price
   if (!buy || !tgt || !stp) return {}
   const range = tgt - stp
-  const cur   = finalStatus.value === 'open' ? (currentPrice.value || buy) : (finalStatus.value === 'target' ? tgt : stp)
+  const cur   = finalStatus.value === 'target' ? tgt : finalStatus.value === 'stop' ? stp : (currentPrice.value || buy)
   const pct   = Math.min(100, Math.max(0, (cur - stp) / range * 100))
-  const color = finalStatus.value === 'target' ? '#22c55e' : finalStatus.value === 'stop' ? '#ef4444' : '#3b82f6'
+  const color = finalStatus.value === 'target' ? '#16a34a' : finalStatus.value === 'stop' ? '#dc2626' : '#2563eb'
   return { width: pct + '%', background: color }
 })
 
@@ -243,7 +256,7 @@ const needleStyle = computed(() => {
   const stp = pred.value.stop_price
   if (!buy || !tgt || !stp) return {}
   const range = tgt - stp
-  const cur   = finalStatus.value === 'open' ? (currentPrice.value || buy) : (finalStatus.value === 'target' ? tgt : stp)
+  const cur   = finalStatus.value === 'target' ? tgt : finalStatus.value === 'stop' ? stp : (currentPrice.value || buy)
   const pct   = Math.min(100, Math.max(0, (cur - stp) / range * 100))
   return { left: pct + '%' }
 })
@@ -300,22 +313,22 @@ const intradayOption = computed(() => {
   const isUp=intradayClose.value>=base
   const priceRange=Math.max(Math.abs(intradayHigh.value-base),Math.abs(intradayLow.value-base))
   const yMin=+(base-priceRange*1.1).toFixed(2), yMax=+(base+priceRange*1.1).toFixed(2)
-  const mainColor=isUp?'#ef4444':'#22c55e'
+  const mainColor=isUp?'#dc2626':'#16a34a'
   return {
-    backgroundColor:'#0f1117', animation:false,
-    tooltip:{ trigger:'axis', axisPointer:{type:'cross',crossStyle:{color:'#4b5563'}}, backgroundColor:'#1a2234', borderColor:'#2d3748', textStyle:{color:'#e2e8f0',fontSize:12},
-      formatter:params=>{const cp=params.find(p=>p.seriesName==='分时');const vp=params.find(p=>p.seriesName==='VWAP');if(!cp)return'';const chg=((cp.value-base)/base*100);return`<b>${cp.name}</b><br/>价格 <b style="color:${cp.value>=base?'#ef4444':'#22c55e'}">${cp.value}</b> (${chg>=0?'+':''}${chg.toFixed(2)}%)<br/>均价 <b style="color:#f6ad55">${vp?.value??'-'}</b>`}},
+    backgroundColor:'#f5f7fa', animation:false,
+    tooltip:{ trigger:'axis', axisPointer:{type:'cross',crossStyle:{color:'#cbd5e1'}}, backgroundColor:'#ffffff', borderColor:'#e2e8f0', textStyle: { color: '#1e293b',fontSize:12},
+      formatter:params=>{const cp=params.find(p=>p.seriesName==='分时');const vp=params.find(p=>p.seriesName==='VWAP');if(!cp)return'';const chg=((cp.value-base)/base*100);return`<b>${cp.name}</b><br/>价格 <b style="color:${cp.value>=base?'#dc2626':'#16a34a'}">${cp.value}</b> (${chg>=0?'+':''}${chg.toFixed(2)}%)<br/>均价 <b style="color:#b45309">${vp?.value??'-'}</b>`}},
     grid:{top:12,left:72,right:60,bottom:24},
-    xAxis:{type:'category',data:times,boundaryGap:false,axisLine:{lineStyle:{color:'#2d3748'}},axisLabel:{color:'#6b7280',fontSize:10}},
+    xAxis:{type:'category',data:times,boundaryGap:false,axisLine:{lineStyle:{color:'#e2e8f0'}},axisLabel:{color:'#64748b',fontSize:10}},
     yAxis:[
-      {type:'value',scale:false,min:yMin,max:yMax,position:'left',splitLine:{lineStyle:{color:'#1a2234',type:'dashed'}},axisLabel:{color:'#9ca3af',fontSize:10},axisLine:{show:false}},
-      {type:'value',scale:false,min:yMin,max:yMax,position:'right',splitLine:{show:false},axisLabel:{color:'#9ca3af',fontSize:10,formatter:v=>{const p=((v-base)/base*100);return(p>=0?'+':'')+p.toFixed(1)+'%'}},axisLine:{show:false}},
+      {type:'value',scale:false,min:yMin,max:yMax,position:'left',splitLine:{lineStyle:{color:'#ffffff',type:'dashed'}},axisLabel:{color:'#94a3b8',fontSize:10},axisLine:{show:false}},
+      {type:'value',scale:false,min:yMin,max:yMax,position:'right',splitLine:{show:false},axisLabel:{color:'#94a3b8',fontSize:10,formatter:v=>{const p=((v-base)/base*100);return(p>=0?'+':'')+p.toFixed(1)+'%'}},axisLine:{show:false}},
     ],
     series:[
       {name:'分时',type:'line',data:closes,showSymbol:false,lineStyle:{color:mainColor,width:1.5},
        areaStyle:{color:{type:'linear',x:0,y:0,x2:0,y2:1,colorStops:[{offset:0,color:isUp?'rgba(239,68,68,0.15)':'rgba(34,197,94,0.15)'},{offset:1,color:'rgba(0,0,0,0)'}]}},
-       markLine:{silent:true,symbol:'none',lineStyle:{type:'solid',color:'#4b5563',width:1},label:{show:true,position:'insideStartTop',formatter:`昨收 ${base}`,color:'#6b7280',fontSize:9},data:[{yAxis:base}]}},
-      {name:'VWAP',type:'line',data:vwap,showSymbol:false,lineStyle:{color:'#f6ad55',width:1}},
+       markLine:{silent:true,symbol:'none',lineStyle:{type:'solid',color:'#cbd5e1',width:1},label:{show:true,position:'insideStartTop',formatter:`昨收 ${base}`,color:'#64748b',fontSize:9},data:[{yAxis:base}]}},
+      {name:'VWAP',type:'line',data:vwap,showSymbol:false,lineStyle:{color:'#b45309',width:1}},
     ],
   }
 })
@@ -324,11 +337,11 @@ const intradayVolOption = computed(() => {
   if (!intradayBars.value.length) return null
   const bars=intradayBars.value, times=bars.map(b=>b.datetime?.slice(11,16)||b.datetime), base=intradayBaseline.value
   return {
-    backgroundColor:'#0f1117',animation:false,
-    tooltip:{trigger:'axis',backgroundColor:'#1a2234',borderColor:'#2d3748',textStyle:{color:'#e2e8f0',fontSize:11},formatter:p=>`${p[0].name}<br/>量 <b>${(p[0].value/1e4).toFixed(1)}万手</b>`},
+    backgroundColor:'#f5f7fa',animation:false,
+    tooltip:{trigger:'axis',backgroundColor:'#ffffff',borderColor:'#e2e8f0',textStyle: { color: '#1e293b',fontSize:11},formatter:p=>`${p[0].name}<br/>量 <b>${(p[0].value/1e4).toFixed(1)}万手</b>`},
     grid:{top:4,left:72,right:60,bottom:24},
-    xAxis:{type:'category',data:times,boundaryGap:false,axisLine:{lineStyle:{color:'#2d3748'}},axisLabel:{color:'#6b7280',fontSize:9}},
-    yAxis:{type:'value',splitLine:{show:false},axisLabel:{color:'#6b7280',fontSize:9,formatter:v=>v>=1e4?(v/1e4).toFixed(0)+'w':v}},
+    xAxis:{type:'category',data:times,boundaryGap:false,axisLine:{lineStyle:{color:'#e2e8f0'}},axisLabel:{color:'#64748b',fontSize:9}},
+    yAxis:{type:'value',splitLine:{show:false},axisLabel:{color:'#64748b',fontSize:9,formatter:v=>v>=1e4?(v/1e4).toFixed(0)+'w':v}},
     series:[{type:'bar',data:bars.map(b=>b.volume),barMaxWidth:6,itemStyle:{color:p=>bars[p.dataIndex]?.close>=base?'rgba(239,68,68,0.8)':'rgba(34,197,94,0.8)'}}],
   }
 })
@@ -365,21 +378,21 @@ const klineOpt = computed(() => {
 
   // Horizontal price lines
   const hLines = []
-  if (buy) hLines.push({ yAxis: buy, lineStyle: { color: '#9ca3af', type: 'dashed', width: 1.5 }, label: { formatter: `买入 ${buy}`, color: '#9ca3af', fontSize: 10, position: 'insideEndTop' } })
-  if (tgt) hLines.push({ yAxis: tgt, lineStyle: { color: '#22c55e', type: 'dashed', width: 1.5 }, label: { formatter: `目标 ${tgt}`, color: '#22c55e', fontSize: 10, position: 'insideEndTop' } })
-  if (stp) hLines.push({ yAxis: stp, lineStyle: { color: '#ef4444', type: 'dashed', width: 1.5 }, label: { formatter: `止损 ${stp}`, color: '#ef4444', fontSize: 10, position: 'insideEndTop' } })
+  if (buy) hLines.push({ yAxis: buy, lineStyle: { color: '#94a3b8', type: 'dashed', width: 1.5 }, label: { formatter: `买入 ${buy}`, color: '#94a3b8', fontSize: 10, position: 'insideEndTop' } })
+  if (tgt) hLines.push({ yAxis: tgt, lineStyle: { color: '#16a34a', type: 'dashed', width: 1.5 }, label: { formatter: `目标 ${tgt}`, color: '#16a34a', fontSize: 10, position: 'insideEndTop' } })
+  if (stp) hLines.push({ yAxis: stp, lineStyle: { color: '#dc2626', type: 'dashed', width: 1.5 }, label: { formatter: `止损 ${stp}`, color: '#dc2626', fontSize: 10, position: 'insideEndTop' } })
 
   // Vertical line at recommendation date (find nearest trading day if exact date not in series)
   const markerDate = predDate && (dates.includes(predDate) ? predDate : dates.find(d => d >= predDate))
   if (markerDate) {
-    hLines.push({ xAxis: markerDate, lineStyle: { color: '#fbbf24', type: 'solid', width: 2, opacity: 0.8 }, label: { formatter: '推荐日', color: '#fbbf24', fontSize: 10, position: 'insideEndTop' } })
+    hLines.push({ xAxis: markerDate, lineStyle: { color: '#b45309', type: 'solid', width: 2, opacity: 0.8 }, label: { formatter: '推荐日', color: '#b45309', fontSize: 10, position: 'insideEndTop' } })
   }
 
   // Mark trigger day
   const markPoints = []
   const trigIdx = triggerDate.value ? dates.indexOf(triggerDate.value) : -1
   if (trigIdx >= 0) {
-    const clr = finalStatus.value === 'target' ? '#22c55e' : '#ef4444'
+    const clr = finalStatus.value === 'target' ? '#16a34a' : '#dc2626'
     const lbl = finalStatus.value === 'target' ? '达目标' : '止损'
     markPoints.push({
       coord: [trigIdx, finalStatus.value === 'target' ? bars[trigIdx].high : bars[trigIdx].low],
@@ -397,21 +410,21 @@ const klineOpt = computed(() => {
     backgroundColor: 'transparent', animation: false,
     tooltip: {
       trigger: 'axis',
-      axisPointer: { type: 'cross', crossStyle: { color: '#374151' } },
-      backgroundColor: '#1e2537', borderColor: '#2d3748',
-      textStyle: { color: '#e2e8f0', fontSize: 12 },
+      axisPointer: { type: 'cross', crossStyle: { color: '#e2e8f0' } },
+      backgroundColor: '#ffffff', borderColor: '#e2e8f0',
+      textStyle: { color: '#1e293b', fontSize: 12 },
       formatter: params => {
         const k = params.find(p => p.seriesName === 'K')
         if (!k) return ''
         const [o, c, lo, h] = k.data
         const dayChg = ((c - o) / o * 100).toFixed(2)
         const vsBuy  = buy ? ((c - buy) / buy * 100).toFixed(2) : null
-        const col    = c >= o ? '#ef4444' : '#22c55e'
+        const col    = c >= o ? '#dc2626' : '#16a34a'
         return `<b>${k.name}</b><br/>
           开 ${o} &nbsp; 收 <span style="color:${col};font-weight:700">${c}</span><br/>
           高 ${h} &nbsp; 低 ${lo}<br/>
           当日 <span style="color:${col}">${dayChg >= 0 ? '+' : ''}${dayChg}%</span>
-          ${vsBuy !== null ? `&nbsp; 较买入 <span style="color:${c >= buy ? '#ef4444' : '#22c55e'}">${vsBuy >= 0 ? '+' : ''}${vsBuy}%</span>` : ''}`
+          ${vsBuy !== null ? `&nbsp; 较买入 <span style="color:${c >= buy ? '#dc2626' : '#16a34a'}">${vsBuy >= 0 ? '+' : ''}${vsBuy}%</span>` : ''}`
       },
     },
     axisPointer: { link: [{ xAxisIndex: 'all' }] },
@@ -419,7 +432,7 @@ const klineOpt = computed(() => {
       { type: 'inside', xAxisIndex: [0, 1], startValue, endValue: dates.length - 1 },
       { type: 'slider', xAxisIndex: [0, 1], height: 20, bottom: 2, startValue, endValue: dates.length - 1,
         borderColor: 'transparent', fillerColor: 'rgba(59,130,246,0.15)',
-        handleStyle: { color: '#3b82f6' }, textStyle: { color: '#6b7280' } },
+        handleStyle: { color: '#2563eb' }, textStyle: { color: '#64748b' } },
     ],
     grid: [
       { top: 16, left: 72, right: 16, bottom: 80 },
@@ -427,24 +440,24 @@ const klineOpt = computed(() => {
     ],
     xAxis: [
       { type: 'category', data: dates, gridIndex: 0, boundaryGap: true,
-        axisLine: { lineStyle: { color: '#1f2937' } }, axisLabel: { show: false } },
+        axisLine: { lineStyle: { color: '#ffffff' } }, axisLabel: { show: false } },
       { type: 'category', data: dates, gridIndex: 1, boundaryGap: true,
-        axisLine: { lineStyle: { color: '#1f2937' } },
-        axisLabel: { color: '#6b7280', fontSize: 10 } },
+        axisLine: { lineStyle: { color: '#ffffff' } },
+        axisLabel: { color: '#64748b', fontSize: 10 } },
     ],
     yAxis: [
       { type: 'value', scale: true, gridIndex: 0,
-        splitLine: { lineStyle: { color: '#1f2937', type: 'dashed' } },
-        axisLabel: { color: '#9ca3af', fontSize: 10 }, axisLine: { show: false } },
+        splitLine: { lineStyle: { color: '#ffffff', type: 'dashed' } },
+        axisLabel: { color: '#94a3b8', fontSize: 10 }, axisLine: { show: false } },
       { type: 'value', gridIndex: 1, splitNumber: 2, splitLine: { show: false },
-        axisLabel: { color: '#6b7280', fontSize: 9,
+        axisLabel: { color: '#64748b', fontSize: 9,
           formatter: v => v >= 1e8 ? (v/1e8).toFixed(0)+'亿' : v >= 1e4 ? (v/1e4).toFixed(0)+'万' : v } },
     ],
     series: [
       {
         name: 'K', type: 'candlestick', xAxisIndex: 0, yAxisIndex: 0,
         data: candles,
-        itemStyle: { color: '#ef4444', color0: '#22c55e', borderColor: '#ef4444', borderColor0: '#22c55e' },
+        itemStyle: { color: '#dc2626', color0: '#16a34a', borderColor: '#dc2626', borderColor0: '#16a34a' },
         markLine: hLines.length ? { silent: true, symbol: 'none', data: hLines } : undefined,
         markPoint: markPoints.length ? { data: markPoints } : undefined,
       },
@@ -457,73 +470,48 @@ const klineOpt = computed(() => {
 })
 
 // ── Data loading ──────────────────────────────────────────────────────────────
+// 详情页只渲染：结算（路径扫描/止盈止损/持仓窗口）全部由后端统一引擎完成，
+// 前端不再自算，从根本上消除「列表结果 vs 详情结果」不一致。
 async function loadDetail() {
-  const code = pred.value.code
-  if (!code) return
+  const id = pred.value.id ||
+    (pred.value.date && pred.value.code ? `${pred.value.date}_${pred.value.code}` : null)
+  if (!id) return
   loadingChart.value = true
   try {
-    const res = await axios.get(`/api/stock-analysis/${code}/technical`, { params: { days: 180 } })
-    const allBars  = res.data?.bars || []
-    const predDate = pred.value.date || ''
+    const res = await axios.get(`/api/predictions/${encodeURIComponent(id)}/detail`)
+    const d = res.data || {}
 
-    // Store full context for K-line chart (includes pre-prediction history)
-    allContextBars.value = allBars
+    if (d.prediction) pred.value = { ...pred.value, ...d.prediction }
+    benchChangePct.value = d.bench_change_pct ?? null
+    allContextBars.value = d.context_bars || []
 
-    // Entry: first bar AFTER prediction date (simulate buying next day)
-    const entryIdx = allBars.findIndex(b => b.date > predDate)
-    if (entryIdx < 0) { loadingChart.value = false; return }
+    const s = d.settlement
+    const path = d.path || []
 
-    const bars = allBars.slice(entryIdx, entryIdx + 60)
-    entryDate.value = bars[0].date
+    if (s) {
+      entryDate.value      = s.entry_date
+      actualBuyPrice.value = s.entry_price
+      triggerDate.value    = s.trigger_date
+      finalReturn.value    = s.final_return ?? 0
+      holdDaysBk.value     = s.hold_days
+      finalStatus.value    = s.outcome === 'hit_target' ? 'target'
+                           : s.outcome === 'hit_stop'   ? 'stop'
+                           : s.settled                  ? 'closed'
+                           : 'open'
+    }
 
-    const buyPrice = pred.value.buy_price || bars[0].open || bars[0].close
-    actualBuyPrice.value = buyPrice
-
-    const tgt = pred.value.target_price
-    const stp = pred.value.stop_price
-
-    let triggered = false
-    let locStatus = null
-    let locReturn = 0
-    let locDate   = null
-
-    const processed = bars.map((b, i) => {
-      let isTriggerDay = false
-      let isAfterLock  = triggered
-
-      if (!triggered) {
-        if (stp && b.low <= stp) {
-          triggered = true; locStatus = 'stop'
-          locReturn = (stp - buyPrice) / buyPrice * 100
-          locDate = b.date; isTriggerDay = true
-        } else if (tgt && b.high >= tgt) {
-          triggered = true; locStatus = 'target'
-          locReturn = (tgt - buyPrice) / buyPrice * 100
-          locDate = b.date; isTriggerDay = true
-        }
-        isAfterLock = false
-      } else {
-        isAfterLock = !isTriggerDay
-      }
-
-      return {
-        ...b,
-        vsBuy:       triggered ? locReturn : (b.close - buyPrice) / buyPrice * 100,
-        dayChg:      i === 0 ? 0 : (b.close - bars[i-1].close) / bars[i-1].close * 100,
-        tradeStatus: triggered ? locStatus : 'open',
-        isTriggerDay,
-        isAfterLock,
-      }
-    })
-
-    detailBars.value  = processed
-    finalStatus.value = locStatus || 'open'
-    finalReturn.value = triggered ? locReturn : (processed[processed.length - 1]?.vsBuy ?? 0)
-    triggerDate.value = locDate
+    detailBars.value = path.map(b => ({
+      date: b.date, open: b.open, high: b.high, low: b.low, close: b.close,
+      volume: b.volume,
+      vsBuy:        b.vs_buy,
+      dayChg:       b.day_chg,
+      tradeStatus:  b.status,        // 'target' | 'stop' | 'open'
+      isTriggerDay: b.is_trigger,
+      isAfterLock:  b.is_after_lock,
+    }))
 
     // Pre-fetch and cache intraday data for all tracking days
-    prefetchIntraday(code, processed.map(b => b.date))
-
+    prefetchIntraday(pred.value.code, detailBars.value.map(b => b.date))
   } catch {}
   loadingChart.value = false
 }
@@ -543,6 +531,7 @@ onMounted(() => {
 
   if (!pred.value.code && route.query.code) {
     pred.value = {
+      id: route.query.id || null,
       code: route.query.code, name: route.query.name || route.query.code,
       date: route.query.date || '',
       buy_price:    parseFloat(route.query.buy)        || null,
@@ -582,9 +571,12 @@ onMounted(() => {
 .hm-lbl  { font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; }
 .hm-val  { font-size: 13px; font-weight: 600; color: var(--text-1); }
 .risk-badge { padding: 2px 7px; border-radius: 10px; font-size: 11px; font-weight: 600; }
-.r-低 { background: #14532d33; color: #4ade80; }
-.r-中 { background: #78350f33; color: #fbbf24; }
-.r-高 { background: #7f1d1d33; color: #f87171; }
+.r-低 { background: #14532d33; color: #16a34a; }
+.r-中 { background: #78350f33; color: #b45309; }
+.r-高 { background: #7f1d1d33; color: #dc2626; }
+.ps-badge { padding: 2px 7px; border-radius: 8px; font-size: 11px; font-weight: 600; }
+.ps-momentum { background: rgba(37,99,235,0.14); color: #2563eb; }
+.ps-pring { background: rgba(8,145,178,0.14); color: #0891b2; }
 
 /* ── Status banner ── */
 .status-banner {
@@ -597,9 +589,12 @@ onMounted(() => {
   gap: 14px 24px;
   align-items: center;
 }
-.sb-open   { background: linear-gradient(135deg, rgba(59,130,246,0.08) 0%, var(--bg-card) 60%); border-color: #1d4ed844; }
-.sb-target { background: linear-gradient(135deg, rgba(34,197,94,0.1) 0%, var(--bg-card) 60%);  border-color: #15803d44; }
-.sb-stop   { background: linear-gradient(135deg, rgba(239,68,68,0.1) 0%, var(--bg-card) 60%);  border-color: #b91c1c44; }
+/* A股语义：达标止盈=盈利=红，触发止损=亏损=绿（与首页推荐战绩一致）。
+   原 var(--bg-card) 令牌不存在导致整条背景失效，改用 --bg-surface。 */
+.sb-open   { background: linear-gradient(135deg, rgba(59,130,246,0.08) 0%, var(--bg-surface) 60%); border-color: #1d4ed844; }
+.sb-target { background: linear-gradient(135deg, rgba(220,38,38,0.09) 0%, var(--bg-surface) 60%); border-color: rgba(220,38,38,.27); }
+.sb-stop   { background: linear-gradient(135deg, rgba(22,163,74,0.09) 0%, var(--bg-surface) 60%); border-color: rgba(22,163,74,.27); }
+.sb-closed { background: linear-gradient(135deg, rgba(100,116,139,0.10) 0%, var(--bg-surface) 60%); border-color: var(--border); }
 
 .sb-main  { display: flex; flex-direction: column; gap: 6px; }
 .sb-badge {
@@ -607,10 +602,17 @@ onMounted(() => {
   font-size: 15px; font-weight: 700; padding: 5px 14px;
   border-radius: 20px; width: fit-content;
 }
-.sbb-open   { background: #1d4ed822; color: #60a5fa; }
-.sbb-target { background: #15803d22; color: #4ade80; }
-.sbb-stop   { background: #b91c1c22; color: #f87171; }
+.sbb-open   { background: #1d4ed822; color: #2563eb; }
+.sbb-target { background: rgba(220,38,38,.13); color: var(--up); }
+.sbb-stop   { background: rgba(22,163,74,.13); color: var(--down); }
+.sbb-closed { background: rgba(100,116,139,.16); color: var(--text-2); }
 .sbb-icon   { font-size: 13px; }
+
+.sb-bench   { font-size: 11px; color: var(--text-3); margin-top: 6px; }
+.sb-bench b { font-family: var(--font-mono); }
+.sb-excess  { margin-left: 8px; }
+.sb-bench .pos { color: #dc2626; }
+.sb-bench .neg { color: #16a34a; }
 
 .sb-dates   { font-size: 12px; color: var(--text-3); display: flex; gap: 6px; flex-wrap: wrap; }
 .sb-dates b { color: var(--text-2); }
@@ -624,8 +626,8 @@ onMounted(() => {
 .sb-pl          { font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; width: 28px; }
 .sb-pv          { font-size: 13px; font-weight: 600; color: var(--text-1); font-family: var(--font-mono); }
 .sb-pv em       { font-style: normal; font-size: 11px; margin-left: 4px; }
-.sb-tgt em      { color: #4ade80; }
-.sb-stp em      { color: #f87171; }
+.sb-tgt em      { color: #16a34a; }
+.sb-stp em      { color: #dc2626; }
 
 /* Progress bar */
 .sb-progress {
@@ -633,8 +635,8 @@ onMounted(() => {
   display: flex; align-items: center; gap: 8px;
 }
 .sbp-label  { font-size: 10px; font-weight: 600; flex-shrink: 0; }
-.sbl-stop   { color: #f87171; }
-.sbl-target { color: #4ade80; }
+.sbl-stop   { color: #dc2626; }
+.sbl-target { color: #16a34a; }
 .sbp-track  {
   flex: 1; height: 6px; background: var(--bg-elevated);
   border-radius: 3px; position: relative; overflow: visible;
@@ -643,8 +645,8 @@ onMounted(() => {
 .sbp-needle {
   position: absolute; top: 50%; transform: translate(-50%, -50%);
   width: 12px; height: 12px; background: #fff;
-  border-radius: 50%; border: 2px solid #6b7280;
-  box-shadow: 0 0 0 2px rgba(0,0,0,0.3);
+  border-radius: 50%; border: 2px solid #64748b;
+  box-shadow: 0 0 0 2px rgba(15,23,42,0.12);
   transition: left 0.4s;
 }
 
@@ -684,40 +686,41 @@ onMounted(() => {
 .dt-mono { font-family: var(--font-mono); }
 .dt-pct  { font-weight: 700; font-family: var(--font-mono); }
 .dt-dim  { color: var(--text-3) !important; }
-.td-high { color: #f87171; }
-.td-low  { color: #4ade80; }
-.td-up   { color: #ef4444; }
-.td-dn   { color: #22c55e; }
+.td-high { color: #dc2626; }
+.td-low  { color: #16a34a; }
+.td-up   { color: #dc2626; }
+.td-dn   { color: #16a34a; }
 
 .locked-tag {
   display: inline-block; margin-left: 5px;
   font-size: 9px; padding: 1px 4px; border-radius: 3px;
-  background: #78350f44; color: #fbbf24; font-weight: 700;
+  background: #78350f44; color: #b45309; font-weight: 700;
   vertical-align: middle;
 }
 
 .status-chip { padding: 2px 7px; border-radius: 8px; font-size: 10px; font-weight: 600; }
-.st-hit  { background: #14532d33; color: #4ade80; }
-.st-stp  { background: #7f1d1d33; color: #f87171; }
+.st-hit  { background: #14532d33; color: #16a34a; }
+.st-stp  { background: #7f1d1d33; color: #dc2626; }
+.st-sell { background: #78350f33; color: #d97706; }
 .st-open { background: var(--bg-elevated); color: var(--text-3); }
 
 /* ── Intraday modal ── */
 .intraday-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 200; display: flex; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(2px); }
-.intraday-modal { width: 100%; max-width: 720px; background: #0f1117; border: 1px solid #1f2937; border-radius: 10px; overflow: hidden; box-shadow: 0 32px 80px rgba(0,0,0,0.7); }
-.intraday-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; background: #111827; border-bottom: 1px solid #1f2937; gap: 12px; flex-wrap: wrap; }
+.intraday-modal { width: 100%; max-width: 720px; background: #f5f7fa; border: 1px solid #ffffff; border-radius: 10px; overflow: hidden; box-shadow: 0 32px 80px rgba(15,23,42,0.12); }
+.intraday-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; background: #f5f7fa; border-bottom: 1px solid #ffffff; gap: 12px; flex-wrap: wrap; }
 .intraday-title { display: flex; flex-direction: column; gap: 2px; }
-.iday-name  { font-size: 14px; font-weight: 700; color: #e2e8f0; }
-.iday-date  { font-size: 11px; color: #6b7280; }
+.iday-name  { font-size: 14px; font-weight: 700; color: var(--text-1); }
+.iday-date  { font-size: 11px; color: #64748b; }
 .intraday-stats { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; flex: 1; justify-content: flex-end; }
 .istat { font-size: 13px; font-weight: 700; }
-.istat-item { font-size: 12px; color: #9ca3af; }
-.istat-item b { color: #e2e8f0; }
-.iday-close { background: none; border: 1px solid #374151; color: #9ca3af; border-radius: 6px; padding: 3px 9px; cursor: pointer; font-size: 13px; }
-.iday-close:hover { color: #e2e8f0; }
-.intraday-loading { display: flex; align-items: center; gap: 10px; padding: 60px; justify-content: center; background: #0f1117; color: #6b7280; }
-.iday-empty { padding: 40px; text-align: center; color: #6b7280; background: #0f1117; }
-.up { color: #ef4444; }
-.dn { color: #22c55e; }
+.istat-item { font-size: 12px; color: #94a3b8; }
+.istat-item b { color: var(--text-1); }
+.iday-close { background: none; border: 1px solid #e2e8f0; color: #94a3b8; border-radius: 6px; padding: 3px 9px; cursor: pointer; font-size: 13px; }
+.iday-close:hover { color: var(--text-1); }
+.intraday-loading { display: flex; align-items: center; gap: 10px; padding: 60px; justify-content: center; background: #f5f7fa; color: #64748b; }
+.iday-empty { padding: 40px; text-align: center; color: #64748b; background: #f5f7fa; }
+.up { color: #dc2626; }
+.dn { color: #16a34a; }
 
 /* ── Overview card ── */
 .ov-card { display: flex; gap: 24px; padding: 16px 20px; flex-wrap: wrap; }

@@ -655,8 +655,8 @@
 
             <!-- Quick actions -->
             <div class="drawer-actions">
-              <router-link :to="{ path: '/backtest', query: { symbol: stockDetail.code } }" class="btn-ghost" @click="stockDetail = null">去回测</router-link>
-              <router-link :to="{ path: '/live', query: { symbol: stockDetail.code } }" class="btn-primary" @click="stockDetail = null">启动模拟 ▶</router-link>
+              <router-link :to="{ path: '/stock/' + stockDetail.code }" class="btn-ghost" @click="stockDetail = null">看K线</router-link>
+              <router-link :to="{ path: '/backtest', query: { symbol: stockDetail.code } }" class="btn-primary" @click="stockDetail = null">去回测 ▶</router-link>
             </div>
           </div>
         </div>
@@ -779,7 +779,7 @@ const stratGroups = computed(() => {
       groupMap[cat] = {
         key: cat,
         label: s.category_label || cat,
-        color: s.category_color || '#718096',
+        color: s.category_color || '#64748b',
         order: s.category_order ?? 99,
         strategies: [],
       }
@@ -1034,7 +1034,7 @@ onUnmounted(() => {
 .view-tabs { display: flex; gap: 3px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 3px; align-self: flex-start; }
 .view-tab { display: flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: calc(var(--radius-md) - 2px); background: transparent; border: none; color: var(--text-3); font-size: 13px; cursor: pointer; transition: all 0.15s; }
 .view-tab:hover { color: var(--text-1); }
-.view-tab.active { background: var(--bg-elevated); color: var(--text-1); box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+.view-tab.active { background: var(--bg-elevated); color: var(--text-1); box-shadow: 0 1px 3px rgba(15,23,42,0.12); }
 
 /* Strategy mode */
 .strategy-mode { display: flex; flex-direction: column; gap: 16px; }
@@ -1059,14 +1059,13 @@ onUnmounted(() => {
 
 /* Risk badge */
 .strat-risk-badge { font-size: 10px; padding: 2px 7px; border-radius: 10px; font-weight: 500; }
-.strat-risk-badge.risk-low  { background: rgba(16,185,129,0.15); color: #10b981; }
-.strat-risk-badge.risk-mid  { background: rgba(245,158,11,0.15); color: #f59e0b; }
-.strat-risk-badge.risk-high { background: rgba(239,68,68,0.15);  color: #ef4444; }
+.strat-risk-badge.risk-low  { background: rgba(16,185,129,0.15); color: #16a34a; }
+.strat-risk-badge.risk-mid  { background: rgba(245,158,11,0.15); color: #d97706; }
+.strat-risk-badge.risk-high { background: rgba(239,68,68,0.15);  color: #dc2626; }
 .strat-suitable-short { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .strat-card {
   background: var(--bg-surface); border: 1px solid var(--border);
-  border-top: 3px solid var(--sc, var(--accent));
   border-radius: var(--radius-lg); padding: 16px;
   display: flex; flex-direction: column; gap: 9px;
   transition: box-shadow 0.15s;
@@ -1154,7 +1153,6 @@ onUnmounted(() => {
 .modal-overlay { position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,0.7); backdrop-filter: blur(3px); display: flex; align-items: center; justify-content: center; padding: 24px; }
 .modal {
   background: var(--bg-surface); border: 1px solid var(--border);
-  border-top: 3px solid var(--mc, var(--accent));
   border-radius: var(--radius-lg);
   width: min(900px, 100%); max-height: 85vh;
   display: flex; flex-direction: column;
@@ -1224,8 +1222,8 @@ onUnmounted(() => {
 .stock-drawer-title-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .stock-drawer-name { font-size: 16px; font-weight: 700; color: var(--text-1); }
 .chg-badge { font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 4px; }
-.chg-up { background: rgba(239,68,68,0.12); color: #f87171; }
-.chg-down { background: rgba(34,197,94,0.12); color: #4ade80; }
+.chg-up { background: rgba(239,68,68,0.12); color: #dc2626; }
+.chg-down { background: rgba(34,197,94,0.12); color: #16a34a; }
 
 .stock-drawer-body { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 20px; }
 
@@ -1268,7 +1266,7 @@ onUnmounted(() => {
 .ai-pill {
   background: linear-gradient(135deg, #3b82f620, #8b5cf620) !important;
   border-color: #8b5cf660 !important;
-  color: #a78bfa !important;
+  color: #7c3aed !important;
   display: flex; align-items: center; gap: 4px;
 }
 .ai-pill:hover { background: linear-gradient(135deg, #3b82f630, #8b5cf630) !important; }
@@ -1306,7 +1304,14 @@ onUnmounted(() => {
 
 @media (max-width: 768px) {
   .layout { grid-template-columns: 1fr; }
-  .stock-drawer { width: 100%; max-width: 100%; position: fixed; inset: auto 0 0 0; height: 85vh; border-left: none; border-top: 1px solid var(--border); border-radius: var(--radius-xl) var(--radius-xl) 0 0; }
+  .stock-drawer { width: 100%; max-width: 100%; position: fixed; inset: auto 0 0 0; height: 85vh; border-left: none; border-top: 1px solid var(--border); border-radius: var(--radius-xl) var(--radius-xl) 0 0; padding-bottom: var(--safe-bottom); }
   .drawer-overlay { align-items: flex-end; }
+
+  /* 结果表格横向滚动，避免列挤压 */
+  .modal-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .modal-table { min-width: 520px; }
+  /* 详情/表单两列在窄屏堆叠 */
+  .detail-grid { grid-template-columns: 1fr; }
+  .form-row { grid-template-columns: 1fr; }
 }
 </style>

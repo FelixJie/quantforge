@@ -7,12 +7,15 @@ export const useAuthStore = defineStore('auth', () => {
   const token = ref(localStorage.getItem('token') || '')
 
   const isAuthenticated = computed(() => !!token.value && !!user.value)
+  const isAdmin = computed(() => !!user.value?.is_admin)
 
   const login = async (username, password) => {
-    const formData = new FormData()
-    formData.append('username', username)
-    formData.append('password', password)
-    const response = await axios.post('/api/auth/token', formData)
+    const params = new URLSearchParams()
+    params.append('username', username)
+    params.append('password', password)
+    const response = await axios.post('/api/auth/token', params, {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    })
     user.value = response.data.user
     token.value = response.data.access_token
     localStorage.setItem('user', JSON.stringify(user.value))
@@ -61,6 +64,7 @@ export const useAuthStore = defineStore('auth', () => {
     user,
     token,
     isAuthenticated,
+    isAdmin,
     login,
     register,
     logout,

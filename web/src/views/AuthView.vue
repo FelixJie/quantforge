@@ -3,7 +3,7 @@
     <div class="auth-card">
       <div class="auth-header">
         <div class="auth-logo">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#e11d2a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline>
             <polyline points="16 7 22 7 22 13"></polyline>
           </svg>
@@ -141,11 +141,14 @@ const handleSubmit = async () => {
 
 <style scoped>
 .auth-container {
-  min-height: 100vh;
+  /* 页面级强调色锁定为品牌红(与 logo 一致),不污染全局 --accent */
+  --auth-accent: #e11d2a;
+  --auth-accent-strong: #c01622;
+  min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  background: linear-gradient(135deg, var(--bg-base) 0%, var(--bg-surface) 100%);
   padding: 24px;
 }
 
@@ -155,7 +158,7 @@ const handleSubmit = async () => {
   background: var(--bg-surface);
   border-radius: 16px;
   padding: 40px 32px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 20px 60px rgba(15,23,42,0.12);
   border: 1px solid var(--border);
 }
 
@@ -167,7 +170,7 @@ const handleSubmit = async () => {
 .auth-logo {
   width: 56px;
   height: 56px;
-  background: rgba(59, 130, 246, 0.1);
+  background: rgba(225, 29, 42, 0.1);
   border-radius: 14px;
   display: flex;
   align-items: center;
@@ -198,13 +201,13 @@ const handleSubmit = async () => {
 .auth-error {
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.3);
-  color: #ef4444;
+  color: #dc2626;
 }
 
 .auth-success {
   background: rgba(34, 197, 94, 0.1);
   border: 1px solid rgba(34, 197, 94, 0.3);
-  color: #22c55e;
+  color: #16a34a;
 }
 
 .auth-form {
@@ -233,12 +236,12 @@ const handleSubmit = async () => {
   background: var(--bg-base);
   color: var(--text-1);
   outline: none;
-  transition: all 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .form-group input:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  border-color: var(--auth-accent);
+  box-shadow: 0 0 0 3px rgba(225, 29, 42, 0.15);
 }
 
 .form-group input::placeholder {
@@ -249,24 +252,38 @@ const handleSubmit = async () => {
   width: 100%;
   padding: 12px 24px;
   margin-top: 8px;
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  background: linear-gradient(135deg, var(--auth-accent) 0%, var(--auth-accent-strong) 100%);
   border: none;
   border-radius: 8px;
   color: white;
   font-size: 15px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: transform 0.2s, box-shadow 0.2s;
 }
 
 .auth-button:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 10px 20px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 10px 20px rgba(225, 29, 42, 0.3);
+}
+
+.auth-button:active:not(:disabled) {
+  transform: translateY(0);
 }
 
 .auth-button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-button,
+  .form-group input {
+    transition: none;
+  }
+  .auth-button:hover:not(:disabled) {
+    transform: none;
+  }
 }
 
 .auth-footer {
@@ -279,7 +296,7 @@ const handleSubmit = async () => {
 .auth-link {
   background: none;
   border: none;
-  color: var(--accent);
+  color: var(--auth-accent);
   font-weight: 600;
   cursor: pointer;
   padding: 0 4px;
@@ -287,6 +304,6 @@ const handleSubmit = async () => {
 }
 
 .auth-link:hover {
-  color: #2563eb;
+  color: var(--auth-accent-strong);
 }
 </style>

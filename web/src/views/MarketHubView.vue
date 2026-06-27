@@ -9,11 +9,11 @@
       </button>
       <button :class="['hub-tab', tab === 'sector' ? 'active' : '']" @click="switchTab('sector')">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
-        板块分析
+        行业板块
       </button>
-      <button :class="['hub-tab', tab === 'news' ? 'active' : '']" @click="switchTab('news')">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6Z"/></svg>
-        消息情绪
+      <button :class="['hub-tab', tab === 'crowding' ? 'active' : '']" @click="switchTab('crowding')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>
+        板块拥挤度
       </button>
       <div class="tab-spacer"></div>
       <button class="btn-refresh" @click="refreshCurrent" :disabled="isLoading">
@@ -24,6 +24,45 @@
 
     <!-- ════════════ TAB: 大盘行情 ════════════ -->
     <template v-if="tab === 'overview'">
+
+      <!-- 顶部量能/情绪条 -->
+      <div class="pulse-bar panel">
+        <div class="pulse-item">
+          <span class="pulse-lbl">两市成交</span>
+          <span class="pulse-val" v-if="turnover">{{ turnover.total_amount?.toLocaleString() }}<small>亿</small></span>
+          <span class="pulse-val muted" v-else>--</span>
+          <span class="pulse-sub" v-if="turnover">沪 {{ (turnover.sh_amount/1).toFixed(0) }} · 深 {{ (turnover.sz_amount).toFixed(0) }}</span>
+        </div>
+        <div class="pulse-sep"></div>
+        <div class="pulse-item">
+          <span class="pulse-lbl">涨 / 跌</span>
+          <span class="pulse-val"><span class="up">{{ breadth?.up_count ?? '--' }}</span> <span class="muted">/</span> <span class="down">{{ breadth?.down_count ?? '--' }}</span></span>
+          <span class="pulse-sub">涨跌比 {{ breadth?.advance_decline_ratio?.toFixed(2) ?? '--' }}</span>
+        </div>
+        <div class="pulse-sep"></div>
+        <div class="pulse-item">
+          <span class="pulse-lbl">涨停 / 跌停</span>
+          <span class="pulse-val"><span class="up">{{ breadth?.limit_up ?? '--' }}</span> <span class="muted">/</span> <span class="down">{{ breadth?.limit_down ?? '--' }}</span></span>
+          <span class="pulse-sub" v-if="limitPool?.seal_rate != null">封板率 {{ limitPool.seal_rate }}%</span>
+        </div>
+        <div class="pulse-sep"></div>
+        <div class="pulse-item">
+          <span class="pulse-lbl">最高连板</span>
+          <span class="pulse-val accent-num">{{ limitPool?.top_height ? limitPool.top_height + '板' : '--' }}</span>
+          <span class="pulse-sub" v-if="limitPool">炸板 {{ limitPool.zb_count }}</span>
+        </div>
+        <div class="pulse-sep"></div>
+        <div class="pulse-item">
+          <span class="pulse-lbl">情绪温度</span>
+          <span class="pulse-val" :class="moodClass">{{ moodLabel }}</span>
+          <span class="pulse-sub">{{ moodScore }}°</span>
+        </div>
+        <div class="pulse-grow"></div>
+        <div class="pulse-item pulse-hsgt" v-if="southbound != null">
+          <span class="pulse-lbl">南向资金</span>
+          <span class="pulse-val" :class="southbound >= 0 ? 'up' : 'down'">{{ southbound >= 0 ? '+' : '' }}{{ southbound.toFixed(1) }}<small>亿</small></span>
+        </div>
+      </div>
 
       <!-- Index cards -->
       <div class="index-row">
@@ -49,36 +88,34 @@
       <!-- Breadth + Movers -->
       <div class="two-col">
 
-        <!-- Market breadth -->
+        <!-- 涨跌分布直方图 -->
         <div class="panel">
-          <div class="panel-title">市场宽度</div>
-          <div v-if="loadingBreadth" class="panel-loading"><span class="spinner spinner-sm"></span> 加载中...</div>
-          <div v-else-if="breadth" class="breadth-body">
-            <div class="breadth-bar-wrap">
-              <div class="breadth-bar">
-                <div class="seg seg-up"   :style="{ flex: breadth.up_count }"></div>
-                <div class="seg seg-flat" :style="{ flex: breadth.flat_count }"></div>
-                <div class="seg seg-down" :style="{ flex: breadth.down_count }"></div>
-              </div>
-              <div class="breadth-leg">
-                <span class="leg-up">▲ 上涨 {{ breadth.up_count }}</span>
-                <span class="leg-flat">— 平 {{ breadth.flat_count }}</span>
-                <span class="leg-down">▼ 下跌 {{ breadth.down_count }}</span>
+          <div class="panel-title">
+            涨跌分布
+            <span class="panel-hint" v-if="distribution">全市场 {{ distribution.total }} 只</span>
+          </div>
+          <div v-if="loadingDistribution" class="panel-loading"><span class="spinner spinner-sm"></span> 加载中...</div>
+          <div v-else-if="distribution" class="dist-body">
+            <div class="dist-chart">
+              <div v-for="b in distribution.buckets" :key="b.key" class="dist-col" :title="b.label + '：' + b.count + ' 只'">
+                <span class="dist-cnt" v-if="b.count">{{ b.count }}</span>
+                <div class="dist-bar" :class="b.side" :style="{ height: distBarHeight(b.count) + '%' }"></div>
+                <span class="dist-lbl">{{ b.label }}</span>
               </div>
             </div>
             <div class="breadth-stats">
-              <div class="bstat"><div class="bstat-val up">{{ breadth.limit_up ?? '--' }}</div><div class="bstat-lbl">涨停</div></div>
-              <div class="bstat"><div class="bstat-val down">{{ breadth.limit_down ?? '--' }}</div><div class="bstat-lbl">跌停</div></div>
-              <div class="bstat"><div class="bstat-val">{{ breadth.total ?? '--' }}</div><div class="bstat-lbl">全市场</div></div>
+              <div class="bstat"><div class="bstat-val up">{{ distribution.up_count }}</div><div class="bstat-lbl">上涨</div></div>
+              <div class="bstat"><div class="bstat-val down">{{ distribution.down_count }}</div><div class="bstat-lbl">下跌</div></div>
+              <div class="bstat"><div class="bstat-val">{{ distribution.flat_count }}</div><div class="bstat-lbl">平盘</div></div>
               <div class="bstat">
-                <div class="bstat-val" :class="(breadth.advance_decline_ratio ?? 0) > 1 ? 'up' : 'down'">
-                  {{ breadth.advance_decline_ratio != null ? breadth.advance_decline_ratio.toFixed(2) : '--' }}
+                <div class="bstat-val" :class="(distribution.advance_decline_ratio ?? 0) > 1 ? 'up' : 'down'">
+                  {{ distribution.advance_decline_ratio != null ? distribution.advance_decline_ratio.toFixed(2) : '--' }}
                 </div>
                 <div class="bstat-lbl">涨跌比</div>
               </div>
             </div>
           </div>
-          <div v-else class="panel-empty">暂无宽度数据</div>
+          <div v-else class="panel-empty">行情快照尚未就绪</div>
         </div>
 
         <!-- Movers -->
@@ -94,7 +131,7 @@
           <div v-else class="movers-list">
             <div v-for="s in displayMovers" :key="s.code" class="mover-row">
               <div class="mover-stock">
-                <router-link :to="'/stock-analysis?symbol=' + s.code" class="mover-name">{{ s.name }}</router-link>
+                <router-link :to="`/stock/${s.code}`" class="mover-name" target="_blank" rel="noopener">{{ s.name }}</router-link>
                 <span class="mover-code">{{ s.code }}</span>
               </div>
               <div class="mover-price mono">{{ s.price != null ? s.price.toFixed(2) : '--' }}</div>
@@ -108,306 +145,131 @@
 
       </div>
 
-      <!-- Sector mini-heatmap -->
-      <div class="panel">
-        <div class="panel-title">
-          行业板块速览
-          <span class="panel-hint">点击板块查看详情</span>
-        </div>
-        <div v-if="loadingSectorMini" class="panel-loading"><span class="spinner spinner-sm"></span></div>
-        <div v-else-if="sectorMini.length" class="sector-tiles">
-          <div
-            v-for="s in sectorMini" :key="s.name"
-            :class="['stile', (s.change_pct ?? 0) >= 0 ? 'up' : 'down']"
-            :style="{ opacity: tileOpacity(s.change_pct) }"
-            @click="goSector(s.name)"
-            :title="s.name + ' ' + fmtPct(s.change_pct)"
-          >
-            <div class="stile-name">{{ s.name }}</div>
-            <div class="stile-pct">{{ fmtPct(s.change_pct) }}</div>
+      <!-- 连板梯队 + 板块资金流 -->
+      <div class="two-col">
+
+        <!-- 连板梯队 -->
+        <div class="panel">
+          <div class="panel-title">
+            连板梯队
+            <span class="panel-hint" v-if="limitPool?.zt_count">{{ limitPool.zt_count }} 涨停 · 封板率 {{ limitPool.seal_rate ?? '--' }}%</span>
           </div>
-        </div>
-        <div v-else class="panel-empty">暂无板块数据</div>
-      </div>
-
-    </template>
-
-    <!-- ════════════ TAB: 板块分析 ════════════ -->
-    <template v-if="tab === 'sector'">
-
-      <!-- Sub-tabs -->
-      <div class="sub-tabs">
-        <button :class="['sub-tab', sectorTab === 'industry' ? 'active' : '']" @click="switchSectorTab('industry')">行业板块</button>
-        <button :class="['sub-tab', sectorTab === 'concept' ? 'active' : '']" @click="switchSectorTab('concept')">概念板块</button>
-        <button :class="['sub-tab', sectorTab === 'flow' ? 'active' : '']" @click="switchSectorTab('flow')">资金流向</button>
-      </div>
-
-      <!-- Industry / Concept shared layout -->
-      <template v-if="sectorTab !== 'flow'">
-        <div v-if="loadingBoards" class="panel"><div class="panel-loading"><span class="spinner spinner-sm"></span> 加载{{ sectorTab === 'industry' ? '行业' : '概念' }}板块...</div></div>
-
-        <template v-if="!loadingBoards && currentBoards.length">
-          <!-- Treemap -->
-          <div class="panel chart-panel">
-            <div class="panel-title">
-              {{ sectorTab === 'industry' ? '行业' : '概念' }}板块热力图
-              <span class="panel-hint">面积=市值，颜色=涨跌幅，点击查看成分股</span>
-            </div>
-            <v-chart :option="treemapOption" autoresize style="height:320px" @click="onTreemapClick" />
-          </div>
-
-          <!-- Controls + board list + stocks panel -->
-          <div class="board-controls panel">
-            <div class="board-search-wrap">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-              <input class="board-search" v-model="boardQuery" placeholder="搜索板块名称..." />
-            </div>
-            <div class="sort-chips">
-              <button v-for="s in sortOpts" :key="s.key"
-                :class="['sort-chip', sortKey === s.key ? 'active' : '']"
-                @click="toggleSort(s.key)">
-                {{ s.label }}{{ sortKey === s.key ? (sortAsc ? ' ↑' : ' ↓') : '' }}
-              </button>
-            </div>
-            <span class="count-hint">共 {{ currentBoards.length }} 个板块</span>
-          </div>
-
-          <div class="board-layout">
-            <div class="board-list panel">
-              <div class="board-list-inner">
-                <div v-for="b in filteredSortedBoards" :key="b.name"
-                  :class="['board-row', selectedBoard === b.name ? 'selected' : '']"
-                  @click="selectBoard(b.name)">
-                  <div class="board-row-main">
-                    <span class="board-name">{{ b.name }}</span>
-                    <span :class="['board-chg', (b.change_pct ?? 0) >= 0 ? 'up' : 'down']">{{ fmtPct(b.change_pct) }}</span>
-                  </div>
-                  <div class="board-row-meta">
-                    <span class="text-3">↑{{ b.up_count }} ↓{{ b.down_count }}</span>
-                    <span class="text-3">换手 {{ b.turnover_rate?.toFixed(2) ?? '—' }}%</span>
-                    <span v-if="b.leader" class="leader-tag">{{ b.leader }}
-                      <span :class="(b.leader_change ?? 0) >= 0 ? 'up' : 'down'">{{ fmtPct(b.leader_change) }}</span>
-                    </span>
-                  </div>
-                </div>
+          <div v-if="loadingLimitPool" class="panel-loading"><span class="spinner spinner-sm"></span> 加载中...</div>
+          <div v-else-if="limitPool?.ladders?.length" class="ladder-body">
+            <div v-for="l in limitPool.ladders" :key="l.lianban" class="ladder-row">
+              <div class="ladder-tag" :class="lbClass(l.lianban)">{{ l.lianban }}板<span class="ladder-n">×{{ l.count }}</span></div>
+              <div class="ladder-stocks">
+                <router-link v-for="s in l.stocks" :key="s.code" :to="`/stock/${s.code}`" class="ladder-chip" :title="s.industry" target="_blank" rel="noopener">
+                  {{ s.name }}
+                </router-link>
               </div>
             </div>
+          </div>
+          <div v-else class="panel-empty">当前无涨停数据（休市/盘前）</div>
+        </div>
 
-            <div class="stocks-panel">
-              <div v-if="!selectedBoard" class="panel empty-stocks">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                <span class="text-3">点击左侧板块查看成分股</span>
+        <!-- 板块资金流 TOP -->
+        <div class="panel">
+          <div class="panel-title">
+            行业资金流
+            <div class="mover-tabs">
+              <button :class="['mtab', flowMode === 'in' ? 'active' : '']" @click="flowMode = 'in'">流入</button>
+              <button :class="['mtab', flowMode === 'out' ? 'active' : '']" @click="flowMode = 'out'">流出</button>
+            </div>
+          </div>
+          <div v-if="loadingFlow" class="panel-loading"><span class="spinner spinner-sm"></span> 加载中...</div>
+          <div v-else-if="displayFlow.length" class="flow-list">
+            <div v-for="b in displayFlow" :key="b.name" class="flow-row" @click="goSector(b.name)">
+              <span class="flow-name">{{ b.name }}</span>
+              <div class="flow-meta">
+                <span :class="['flow-chg', (b.change_pct ?? 0) >= 0 ? 'up' : 'down']">{{ fmtPct(b.change_pct) }}</span>
+                <span :class="['flow-amt', (b.net_flow ?? 0) >= 0 ? 'up' : 'down']">{{ fmtFlow(b.net_flow) }}</span>
               </div>
-              <div v-else-if="loadingStocks" class="panel empty-stocks">
-                <span class="spinner spinner-sm"></span>
-                <span class="text-2">加载 {{ selectedBoard }} 成分股...</span>
-              </div>
-              <template v-else-if="boardStocks.length">
-                <div class="panel stocks-header">
-                  <span class="fw-600">{{ selectedBoard }}</span>
-                  <span class="text-3">{{ boardStocks.length }} 只</span>
-                </div>
-                <div class="panel stocks-table-wrap">
-                  <table class="data-table">
-                    <thead><tr><th>代码</th><th>名称</th><th>现价</th><th>涨跌%</th><th>换手率</th><th>PE</th><th>PB</th><th></th></tr></thead>
-                    <tbody>
-                      <tr v-for="s in boardStocks" :key="s.code">
-                        <td><span class="mono accent">{{ s.code }}</span></td>
-                        <td>{{ s.name }}</td>
-                        <td class="mono">{{ s.price?.toFixed(2) ?? '—' }}</td>
-                        <td :class="(s.change_pct ?? 0) >= 0 ? 'pos' : 'neg'">{{ fmtPct(s.change_pct) }}</td>
-                        <td class="mono text-3">{{ s.turnover_rate?.toFixed(2) ?? '—' }}%</td>
-                        <td class="mono text-3">{{ s.pe?.toFixed(1) ?? '—' }}</td>
-                        <td class="mono text-3">{{ s.pb?.toFixed(2) ?? '—' }}</td>
-                        <td>
-                          <router-link :to="'/stock-analysis?symbol=' + s.code" class="action-link">分析</router-link>
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </template>
-              <div v-else class="panel empty-stocks"><span class="text-3">暂无成分股数据</span></div>
             </div>
           </div>
-        </template>
-      </template>
-
-      <!-- Fund flow tab -->
-      <template v-if="sectorTab === 'flow'">
-        <div class="panel flow-header-row">
-          <span class="fw-600">行业资金流向</span>
-          <div class="ind-chips">
-            <button v-for="ind in ['今日', '5日', '10日']" :key="ind"
-              :class="['ind-chip', flowIndicator === ind ? 'active' : '']"
-              @click="switchFlowIndicator(ind)">{{ ind }}</button>
-          </div>
-          <button class="btn-ghost btn-sm" @click="loadFlow" :disabled="loadingFlow">
-            <span v-if="loadingFlow" class="spinner spinner-sm"></span>
-            <span v-else>刷新</span>
-          </button>
+          <div v-else class="panel-empty">暂无资金流数据（非交易时段）</div>
         </div>
 
-        <div v-if="loadingFlow" class="panel panel-loading"><span class="spinner spinner-sm"></span> 加载资金流向...</div>
-        <div v-if="!loadingFlow && flowError" class="error-box">{{ flowError }}</div>
-
-        <template v-if="!loadingFlow && flowData.length">
-          <div class="flow-charts">
-            <div class="panel chart-panel">
-              <div class="panel-title">净流入 Top 10</div>
-              <v-chart :option="inflowOption" autoresize style="height:260px" />
-            </div>
-            <div class="panel chart-panel">
-              <div class="panel-title">净流出 Top 10</div>
-              <v-chart :option="outflowOption" autoresize style="height:260px" />
-            </div>
-          </div>
-          <div class="panel">
-            <div class="table-wrap">
-              <table class="data-table">
-                <thead><tr><th>排名</th><th>板块</th><th>净流入(万)</th><th>净流入%</th><th>主力净流入</th><th>涨跌%</th></tr></thead>
-                <tbody>
-                  <tr v-for="b in flowData" :key="b.name" :class="(b.net_flow ?? 0) >= 0 ? 'row-in' : 'row-out'">
-                    <td class="text-3">{{ b.rank }}</td>
-                    <td class="fw-600">{{ b.name }}</td>
-                    <td :class="(b.net_flow ?? 0) >= 0 ? 'pos' : 'neg'">
-                      {{ b.net_flow != null ? ((b.net_flow >= 0 ? '+' : '') + (b.net_flow/10000).toFixed(0) + '万') : '—' }}
-                    </td>
-                    <td :class="(b.net_flow_pct ?? 0) >= 0 ? 'pos' : 'neg'">{{ fmtPct(b.net_flow_pct) }}</td>
-                    <td :class="(b.main_flow ?? 0) >= 0 ? 'pos' : 'neg'">
-                      {{ b.main_flow != null ? ((b.main_flow >= 0 ? '+' : '') + (b.main_flow/10000).toFixed(0) + '万') : '—' }}
-                    </td>
-                    <td :class="(b.change_pct ?? 0) >= 0 ? 'pos' : 'neg'">{{ fmtPct(b.change_pct) }}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </template>
-      </template>
-
-    </template>
-
-    <!-- ════════════ TAB: 消息情绪 ════════════ -->
-    <template v-if="tab === 'news'">
-
-      <!-- Sentiment banner -->
-      <div class="panel sentiment-bar" v-if="sentiment">
-        <div class="sent-group">
-          <span class="sent-label">市场情绪</span>
-          <span class="sent-score" :class="sentimentClass">{{ sentiment.label }}</span>
-          <span class="sent-detail">
-            <span class="pos">↑ {{ sentiment.positive }}</span>
-            <span class="neg">↓ {{ sentiment.negative }}</span>
-            <span class="neu">— {{ sentiment.neutral }}</span>
-          </span>
-        </div>
-        <div class="sent-headlines" v-if="sentiment.recent_headlines?.length">
-          <span class="h-chip" v-for="h in sentiment.recent_headlines" :key="h">{{ h }}</span>
-        </div>
-        <span class="sent-time text-3">{{ sentiment.updated_at?.slice(11,16) }} 更新</span>
       </div>
 
-      <div class="news-layout">
-        <!-- Left: market flash -->
-        <div class="col-main">
-          <div class="panel col-head">
-            <span class="col-title">市场快讯</span>
-            <div class="col-actions">
-              <button class="btn-ghost btn-sm" @click="loadAISummary(null)" :disabled="aiLoading && !aiSymbol">
-                <span v-if="aiLoading && !aiSymbol" class="spinner spinner-sm"></span>
-                <span v-else>✨ AI总结</span>
-              </button>
-              <button class="btn-ghost btn-sm" @click="loadMarket" :disabled="loadingMarket">
-                <span v-if="loadingMarket" class="spinner spinner-sm"></span>
-                <span v-else>刷新</span>
-              </button>
-            </div>
-          </div>
+      <!-- 两市两融 + 增量快讯 -->
+      <div class="two-col">
 
-          <div v-if="aiSummary && !aiSymbol" class="panel ai-panel">
-            <div class="ai-head">
-              <span class="ai-tag">✨ AI 市场分析</span>
-              <span class="text-3 tiny">{{ aiSummary.generated_at?.slice(11,19) }}</span>
+        <!-- 两市两融 -->
+        <div class="panel">
+          <div class="panel-title">
+            两市两融
+            <span class="panel-hint" v-if="marginTotal?.date">{{ marginTotal.date }}</span>
+          </div>
+          <div v-if="loadingMargin" class="panel-loading"><span class="spinner spinner-sm"></span> 加载中...</div>
+          <template v-else-if="marginTotal">
+            <div class="margin-hero">
+              <span class="mh-label">两市融资融券余额</span>
+              <span class="mh-value mono">{{ fmtYi(marginTotal.total) }}</span>
+              <span class="mh-sub">融资 {{ fmtYi(marginTotal.rz) }} · 融券 {{ fmtYi(marginTotal.rq) }}</span>
             </div>
-            <p class="ai-body">{{ aiSummary.summary }}</p>
-          </div>
-
-          <div v-if="loadingMarket && !marketItems.length" class="panel panel-loading">
-            <span class="spinner"></span><span class="text-2">加载中...</span>
-          </div>
-          <div v-else-if="marketItems.length" class="panel news-list">
-            <div v-for="item in marketItems" :key="item.title + item.date" class="news-item" @click="item._expanded = !item._expanded">
-              <div class="ni-row">
-                <span :class="['sdot', item.sentiment]"></span>
-                <span class="ni-title">{{ item.title }}</span>
-                <span class="ni-meta">
-                  <span class="ni-source" v-if="item.source">{{ item.source }}</span>
-                  <span class="ni-time">{{ item.date?.slice(5) }} {{ item.time }}</span>
+            <div v-if="marginChart" class="margin-trend">
+              <svg class="mt-svg" :viewBox="`0 0 ${MC_W} ${MC_H}`" preserveAspectRatio="none">
+                <polyline class="mt-area" :class="{ down: !marginChart.up }" :points="marginChart.area" />
+                <polyline class="mt-line" :class="{ down: !marginChart.up }" :points="marginChart.pts" />
+              </svg>
+              <div class="mt-foot">
+                <span>{{ marginChart.spanLabel }}</span>
+                <span class="mt-chg" :class="marginChart.up ? 'up' : 'down'">
+                  {{ marginChart.chgPct >= 0 ? '+' : '' }}{{ marginChart.chgPct.toFixed(1) }}%
                 </span>
               </div>
-              <div v-if="item._expanded && item.content" class="ni-content">{{ item.content }}</div>
             </div>
-          </div>
-          <div v-else-if="!loadingMarket" class="panel empty-card"><span class="text-3">暂无数据，点击刷新重试</span></div>
+          </template>
+          <div v-else class="panel-empty">暂无两融数据</div>
         </div>
 
-        <!-- Right: stock news search -->
-        <div class="col-side">
-          <div class="panel col-head">
-            <span class="col-title">个股资讯</span>
-            <div class="stock-search">
-              <input class="input input-sm" v-model="searchSym" placeholder="如 000001"
-                     @keyup.enter="loadStock" maxlength="6" />
-              <button class="btn-ghost btn-sm" @click="loadAISummary(searchSym)" :disabled="aiLoading || !searchSym" title="AI分析">✨</button>
-              <button class="btn-primary btn-sm" @click="loadStock" :disabled="loadingStock || !searchSym">
-                <span v-if="loadingStock" class="spinner spinner-sm"></span>
-                <span v-else>查</span>
-              </button>
-            </div>
+        <!-- 增量快讯 -->
+        <div class="panel">
+          <div class="panel-title">
+            增量快讯
+            <button class="mtab" @click="openPage('/cls')">财联社电报 →</button>
           </div>
-
-          <div v-if="aiSummary && aiSymbol === searchSym" class="panel ai-panel">
-            <div class="ai-head">
-              <span class="ai-tag">✨ {{ searchSym }} AI分析</span>
-              <span class="text-3 tiny">{{ aiSummary.generated_at?.slice(11,19) }}</span>
-            </div>
-            <p class="ai-body">{{ aiSummary.summary }}</p>
+          <div v-if="loadingFlash" class="panel-loading"><span class="spinner spinner-sm"></span> 加载中...</div>
+          <div v-else-if="flash.length" class="flash-list">
+            <a v-for="(n, i) in flash.slice(0, 8)" :key="i" :href="n.url || undefined"
+               :target="n.url ? '_blank' : undefined" class="flash-row">
+              <span class="flash-time mono">{{ shortTime(n.time) }}</span>
+              <span class="flash-title">{{ n.title }}</span>
+            </a>
           </div>
-
-          <div v-if="loadingStock" class="panel panel-loading">
-            <span class="spinner"></span><span class="text-2">查询中...</span>
-          </div>
-          <div v-else-if="stockItems.length" class="panel news-list">
-            <div class="list-header text-3">{{ searchSym }} · {{ stockItems.length }} 条资讯</div>
-            <div v-for="item in stockItems" :key="item.title + item.date" class="news-item" @click="item._expanded = !item._expanded">
-              <div class="ni-row">
-                <span :class="['sdot', item.sentiment]"></span>
-                <span class="ni-title">{{ item.title }}</span>
-                <span class="ni-meta"><span class="ni-time">{{ item.date?.slice(5) }} {{ item.time }}</span></span>
-              </div>
-              <div v-if="item._expanded && item.content" class="ni-content">{{ item.content }}</div>
-            </div>
-          </div>
-          <div v-else-if="stockQueried && !loadingStock" class="panel empty-card">
-            <span class="text-3">未查到 {{ searchSym }} 的资讯</span>
-          </div>
-          <div v-else class="panel empty-card"><span class="text-3">输入股票代码查询资讯</span></div>
+          <div v-else class="panel-empty">暂无快讯</div>
         </div>
+
       </div>
 
+    </template>
+
+    <!-- ════════════ TAB: 行业板块 ════════════ -->
+    <template v-if="tab === 'sector'">
+      <SectorBoardPanel />
+    </template>
+
+    <!-- ════════════ TAB: 板块拥挤度 ════════════ -->
+    <template v-if="tab === 'crowding'">
+      <SectorCrowdingPanel />
     </template>
 
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import VChart from '../charts'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
+import SectorBoardPanel from '../components/SectorBoardPanel.vue'
+import SectorCrowdingPanel from '../components/SectorCrowdingPanel.vue'
 
 const route  = useRoute()
 const router = useRouter()
+// 跳转统一在新标签页打开
+function openPage(to) { window.open(router.resolve(to).href, '_blank') }
 
 // ── Active tab ────────────────────────────────────────────────
 const tab = ref('overview')
@@ -415,13 +277,60 @@ const tab = ref('overview')
 // ── Tab 1: 大盘行情 ───────────────────────────────────────────
 const indices        = ref([])
 const breadth        = ref(null)
+const distribution   = ref(null)
 const topMovers      = ref([])
-const sectorMini     = ref([])
+const turnover       = ref(null)
+const limitPool      = ref(null)
+const sectorFlow     = ref([])
+const hsgt           = ref(null)
 const moverMode      = ref('up')
+const flowMode       = ref('in')
 const loadingIndices = ref(false)
 const loadingBreadth = ref(false)
+const loadingDistribution = ref(false)
 const loadingMovers  = ref(false)
-const loadingSectorMini = ref(false)
+const loadingLimitPool = ref(false)
+const loadingFlow    = ref(false)
+
+// 两市两融 + 增量快讯（原首页「市场资讯」并入此处）
+const margin       = ref([])
+const marginSeries = ref([])
+const flash        = ref([])
+const loadingMargin = ref(false)
+const loadingFlash  = ref(false)
+
+const marginTotal   = computed(() => margin.value.find(m => m.market === '两市合计') || null)
+function fmtYi(v) {
+  if (v == null) return '—'
+  const yi = v / 1e8
+  if (yi >= 10000) return (yi / 10000).toLocaleString('zh-CN', { maximumFractionDigits: 2 }) + ' 万亿'
+  return yi.toLocaleString('zh-CN', { maximumFractionDigits: 1 }) + ' 亿'
+}
+function shortTime(t) {
+  if (!t) return ''
+  const m = String(t).match(/(\d{1,2}:\d{2})/)
+  return m ? m[1] : String(t).slice(-8, -3)
+}
+const MC_W = 280, MC_H = 56, MC_PAD = 3
+const marginChart = computed(() => {
+  const s = (marginSeries.value || []).slice(-132)   // 近半年
+  if (s.length < 2) return null
+  const vals = s.map(d => d.total)
+  const min = Math.min(...vals), max = Math.max(...vals)
+  const span = max - min || 1
+  const n = s.length
+  const x = i => MC_PAD + (i / (n - 1)) * (MC_W - 2 * MC_PAD)
+  const y = v => MC_PAD + (1 - (v - min) / span) * (MC_H - 2 * MC_PAD)
+  const pts = s.map((d, i) => `${x(i).toFixed(1)},${y(d.total).toFixed(1)}`).join(' ')
+  const last = s[n - 1].total, first = s[0].total
+  return {
+    pts,
+    area: `${MC_PAD},${MC_H - MC_PAD} ` + pts + ` ${(MC_W - MC_PAD).toFixed(1)},${MC_H - MC_PAD}`,
+    up: last >= first,
+    chgPct: first ? ((last - first) / first) * 100 : 0,
+    spanLabel: `${s[0].date?.slice(5)} 至今`,
+  }
+})
 
 const displayMovers = computed(() =>
   moverMode.value === 'up'
@@ -429,121 +338,59 @@ const displayMovers = computed(() =>
     : [...topMovers.value].sort((a, b) => (a.change_pct ?? 0) - (b.change_pct ?? 0)).slice(0, 12)
 )
 
-// ── Tab 2: 板块分析 ───────────────────────────────────────────
-const sectorTab      = ref('industry')
-const industryBoards = ref([])
-const conceptBoards  = ref([])
-const selectedBoard  = ref('')
-const boardStocks    = ref([])
-const flowData       = ref([])
-const flowIndicator  = ref('今日')
-const loadingBoards  = ref(false)
-const loadingStocks  = ref(false)
-const loadingFlow    = ref(false)
-const boardQuery     = ref('')
-const sortKey        = ref('change_pct')
-const sortAsc        = ref(false)
-const flowError      = ref('')
-
-const sortOpts = [
-  { key: 'change_pct',    label: '涨跌幅' },
-  { key: 'turnover_rate', label: '换手率' },
-  { key: 'up_count',      label: '上涨家数' },
-  { key: 'market_cap',    label: '总市值' },
-]
-
-const currentBoards = computed(() =>
-  sectorTab.value === 'industry' ? industryBoards.value : conceptBoards.value
-)
-
-const filteredSortedBoards = computed(() => {
-  let arr = currentBoards.value
-  if (boardQuery.value.trim()) arr = arr.filter(b => b.name?.includes(boardQuery.value.trim()))
-  return [...arr].sort((a, b) => {
-    const av = a[sortKey.value] ?? (sortAsc.value ? Infinity : -Infinity)
-    const bv = b[sortKey.value] ?? (sortAsc.value ? Infinity : -Infinity)
-    return sortAsc.value ? av - bv : bv - av
-  })
+const displayFlow = computed(() => {
+  const arr = [...sectorFlow.value]
+  return flowMode.value === 'in'
+    ? arr.sort((a, b) => (b.net_flow ?? 0) - (a.net_flow ?? 0)).slice(0, 12)
+    : arr.sort((a, b) => (a.net_flow ?? 0) - (b.net_flow ?? 0)).slice(0, 12)
 })
 
-const treemapOption = computed(() => {
-  const boards = currentBoards.value
-  if (!boards.length) return null
-  return {
-    backgroundColor: 'transparent',
-    tooltip: {
-      formatter: p => {
-        const d = p.data
-        return `<b>${d.name}</b><br/>涨跌：${fmtPct(d.change_pct)}<br/>上涨：${d.up_count} 下跌：${d.down_count}<br/>换手：${d.turnover_rate?.toFixed(2) ?? '—'}%`
-      }
-    },
-    series: [{
-      type: 'treemap', width: '100%', height: '100%', roam: false, nodeClick: false,
-      breadcrumb: { show: false },
-      label: {
-        show: true, fontSize: 11, color: '#fff',
-        formatter: p => `{n|${p.data.name}}\n{c|${fmtPct(p.data.change_pct)}}`,
-        rich: { n: { fontSize: 11, fontWeight: 700, color: '#fff' }, c: { fontSize: 10, color: 'rgba(255,255,255,0.85)' } },
-      },
-      itemStyle: { borderColor: '#0f172a', borderWidth: 2 },
-      emphasis: { itemStyle: { borderColor: '#fff', borderWidth: 2 } },
-      data: boards.filter(b => b.market_cap > 0).map(b => ({
-        name: b.name, value: b.market_cap,
-        change_pct: b.change_pct, up_count: b.up_count, down_count: b.down_count, turnover_rate: b.turnover_rate,
-        itemStyle: { color: pctColor(b.change_pct) },
-      })),
-    }],
-  }
+// 南向资金合计(北向已停披露，只取 available 的南向通道)
+const southbound = computed(() => {
+  if (!hsgt.value?.channels) return null
+  const south = hsgt.value.channels.filter(c => c.direction === '南向' && c.net_buy != null)
+  if (!south.length) return null
+  return south.reduce((s, c) => s + c.net_buy, 0)
 })
 
-const inflowOption = computed(() => {
-  if (!flowData.value.length) return null
-  const top10 = [...flowData.value].filter(b => (b.net_flow ?? 0) > 0).slice(0, 10).reverse()
-  return {
-    backgroundColor: 'transparent',
-    tooltip: { trigger: 'axis', formatter: p => `${p[0].name}<br/>净流入: ${(p[0].value/10000).toFixed(0)}万` },
-    grid: { left: 80, right: 20, top: 8, bottom: 8 },
-    xAxis: { type: 'value', axisLabel: { color: '#718096', fontSize: 10, formatter: v => (v/10000).toFixed(0)+'w' }, splitLine: { lineStyle: { color: '#1a2035' } } },
-    yAxis: { type: 'category', data: top10.map(b => b.name), axisLabel: { color: '#a0aec0', fontSize: 11 } },
-    series: [{ type: 'bar', data: top10.map(b => ({ value: b.net_flow, itemStyle: { color: '#ef4444' } })), barMaxWidth: 20 }],
-  }
+// 情绪温度: 综合涨跌比、涨停数、封板率、连板高度 → 0~100°
+const moodScore = computed(() => {
+  let score = 50
+  const ratio = distribution.value?.advance_decline_ratio
+  if (ratio != null) score += Math.min(Math.max((ratio - 1) * 18, -25), 25)
+  const lu = breadth.value?.limit_up ?? 0, ld = breadth.value?.limit_down ?? 0
+  score += Math.min((lu - ld * 2) * 0.4, 18)
+  if (limitPool.value?.seal_rate != null) score += (limitPool.value.seal_rate - 50) * 0.2
+  if (limitPool.value?.top_height) score += Math.min(limitPool.value.top_height * 1.5, 12)
+  return Math.round(Math.min(Math.max(score, 0), 100))
+})
+const moodLabel = computed(() => {
+  const s = moodScore.value
+  return s >= 70 ? '亢奋' : s >= 58 ? '偏暖' : s >= 42 ? '中性' : s >= 30 ? '偏冷' : '冰点'
+})
+const moodClass = computed(() => {
+  const s = moodScore.value
+  return s >= 58 ? 'up' : s <= 42 ? 'down' : 'muted'
 })
 
-const outflowOption = computed(() => {
-  if (!flowData.value.length) return null
-  const bottom10 = [...flowData.value].filter(b => (b.net_flow ?? 0) < 0).slice(-10)
-  return {
-    backgroundColor: 'transparent',
-    tooltip: { trigger: 'axis', formatter: p => `${p[0].name}<br/>净流出: ${(Math.abs(p[0].value)/10000).toFixed(0)}万` },
-    grid: { left: 80, right: 20, top: 8, bottom: 8 },
-    xAxis: { type: 'value', axisLabel: { color: '#718096', fontSize: 10, formatter: v => (Math.abs(v)/10000).toFixed(0)+'w' }, splitLine: { lineStyle: { color: '#1a2035' } } },
-    yAxis: { type: 'category', data: bottom10.map(b => b.name), axisLabel: { color: '#a0aec0', fontSize: 11 } },
-    series: [{ type: 'bar', data: bottom10.map(b => ({ value: b.net_flow, itemStyle: { color: '#22c55e' } })), barMaxWidth: 20 }],
-  }
-})
-
-// ── Tab 3: 消息情绪 ───────────────────────────────────────────
-const sentiment    = ref(null)
-const marketItems  = ref([])
-const loadingMarket = ref(false)
-const searchSym    = ref('')
-const stockItems   = ref([])
-const loadingStock = ref(false)
-const stockQueried = ref(false)
-const aiSummary    = ref(null)
-const aiLoading    = ref(false)
-const aiSymbol     = ref(null)
-let newsTimer = null
-
-const sentimentClass = computed(() => {
-  const s = sentiment.value?.score ?? 0
-  return s > 10 ? 'pos' : s < -10 ? 'neg' : 'neu'
-})
+function distBarHeight(count) {
+  const max = Math.max(1, ...(distribution.value?.buckets || []).map(b => b.count))
+  return Math.max(count ? 4 : 0, (count / max) * 100)
+}
+function lbClass(lb) {
+  return lb >= 4 ? 'lb-hot' : lb >= 2 ? 'lb-warm' : 'lb-base'
+}
+function fmtFlow(v) {
+  if (v == null) return '—'
+  const a = Math.abs(v)
+  const s = a >= 1 ? a.toFixed(1) + '亿' : (a * 1e4).toFixed(0) + '万'
+  return (v >= 0 ? '+' : '-') + s
+}
 
 // ── Global loading indicator ───────────────────────────────────
 const isLoading = computed(() =>
-  loadingIndices.value || loadingBreadth.value || loadingMovers.value ||
-  loadingSectorMini.value || loadingBoards.value || loadingFlow.value || loadingMarket.value
+  loadingIndices.value || loadingDistribution.value || loadingMovers.value ||
+  loadingLimitPool.value
 )
 
 // ── Data loaders ──────────────────────────────────────────────
@@ -572,96 +419,69 @@ async function loadMovers() {
   } catch { topMovers.value = [] } finally { loadingMovers.value = false }
 }
 
-async function loadSectorMini() {
-  loadingSectorMini.value = true
+async function loadDistribution() {
+  loadingDistribution.value = true
   try {
-    const res = await axios.get('/api/sector/industry')
-    sectorMini.value = (res.data.boards || []).slice(0, 36)
-  } catch { sectorMini.value = [] } finally { loadingSectorMini.value = false }
+    const res = await axios.get('/api/market/distribution')
+    distribution.value = res.data
+    // distribution 已含全部宽度字段，复用驱动顶部脉冲条，省一次 /breadth 请求
+    breadth.value = {
+      up_count: res.data.up_count, down_count: res.data.down_count,
+      flat_count: res.data.flat_count, limit_up: res.data.limit_up,
+      limit_down: res.data.limit_down, total: res.data.total,
+      advance_decline_ratio: res.data.advance_decline_ratio,
+    }
+  } catch { distribution.value = null } finally { loadingDistribution.value = false }
 }
 
-async function loadBoards(type) {
-  loadingBoards.value = true
+async function loadTurnover() {
+  try { const res = await axios.get('/api/market/turnover'); turnover.value = res.data } catch { turnover.value = null }
+}
+
+async function loadLimitPool() {
+  loadingLimitPool.value = true
   try {
-    const res = await axios.get(`/api/sector/${type}`)
-    if (type === 'industry') industryBoards.value = res.data.boards || []
-    else                     conceptBoards.value  = res.data.boards || []
-  } catch {} finally { loadingBoards.value = false }
+    const res = await axios.get('/api/market/limit-pool')
+    limitPool.value = res.data
+  } catch { limitPool.value = null } finally { loadingLimitPool.value = false }
 }
 
-async function selectBoard(name) {
-  if (selectedBoard.value === name) { selectedBoard.value = ''; boardStocks.value = []; return }
-  selectedBoard.value = name
-  loadingStocks.value = true
-  boardStocks.value = []
+async function loadSectorFlow() {
+  loadingFlow.value = true
   try {
-    const res = await axios.get(`/api/sector/${sectorTab.value}/${encodeURIComponent(name)}`)
-    boardStocks.value = res.data.stocks || []
-  } catch {} finally { loadingStocks.value = false }
+    const res = await axios.get('/api/sector/fund-flow', { params: { indicator: '今日' } })
+    sectorFlow.value = res.data.boards || []
+  } catch { sectorFlow.value = [] } finally { loadingFlow.value = false }
 }
 
-function onTreemapClick(params) {
-  if (params.data?.name) selectBoard(params.data.name)
+async function loadHsgt() {
+  try { const res = await axios.get('/api/market/hsgt'); hsgt.value = res.data } catch { hsgt.value = null }
 }
 
-async function loadFlow() {
-  loadingFlow.value = true; flowError.value = ''
+async function loadMargin() {
+  loadingMargin.value = true
   try {
-    const res = await axios.get('/api/sector/fund-flow', { params: { indicator: flowIndicator.value } })
-    flowData.value = res.data.boards || []
-  } catch (e) {
-    flowError.value = e.response?.data?.detail || '资金流向数据获取失败（非交易时间可能无数据）'
-  } finally { loadingFlow.value = false }
+    const res = await axios.get('/api/home/margin')
+    margin.value = res.data?.items || []
+    marginSeries.value = res.data?.series || []
+  } catch { margin.value = []; marginSeries.value = [] } finally { loadingMargin.value = false }
 }
 
-async function switchFlowIndicator(ind) {
-  flowIndicator.value = ind
-  await loadFlow()
-}
-
-function toggleSort(key) {
-  if (sortKey.value === key) sortAsc.value = !sortAsc.value
-  else { sortKey.value = key; sortAsc.value = false }
-}
-
-async function switchSectorTab(t) {
-  sectorTab.value = t
-  selectedBoard.value = ''
-  boardStocks.value = []
-  if (t === 'industry' && !industryBoards.value.length) await loadBoards('industry')
-  if (t === 'concept'  && !conceptBoards.value.length)  await loadBoards('concept')
-  if (t === 'flow'     && !flowData.value.length)        await loadFlow()
-}
-
-async function loadSentiment() {
-  try { const res = await axios.get('/api/news/sentiment'); sentiment.value = res.data } catch {}
-}
-
-async function loadMarket() {
-  loadingMarket.value = true
+async function loadFlash() {
+  loadingFlash.value = true
   try {
-    const res = await axios.get('/api/news/market', { params: { count: 30 } })
-    marketItems.value = (res.data.items || []).map(i => ({ ...i, _expanded: false }))
-  } catch {} finally { loadingMarket.value = false }
+    const res = await axios.get('/api/news/flash', { params: { count: 12 } })
+    flash.value = res.data?.items || []
+  } catch { flash.value = [] } finally { loadingFlash.value = false }
 }
 
-async function loadStock() {
-  if (!searchSym.value) return
-  loadingStock.value = true; stockQueried.value = true; stockItems.value = []
-  try {
-    const res = await axios.get(`/api/news/stock/${searchSym.value}`, { params: { count: 20 } })
-    stockItems.value = (res.data.items || []).map(i => ({ ...i, _expanded: false }))
-  } catch {} finally { loadingStock.value = false }
-}
-
-async function loadAISummary(sym) {
-  aiLoading.value = true; aiSymbol.value = sym; aiSummary.value = null
-  try {
-    const res = await axios.post('/api/news/ai-summary', null, { params: sym ? { symbol: sym } : {} })
-    aiSummary.value = res.data
-  } catch (e) {
-    aiSummary.value = { summary: 'AI分析失败: ' + (e.response?.data?.detail || e.message) }
-  } finally { aiLoading.value = false }
+// 大盘行情 Tab 的全部数据(并发拉取)。板块明细已独立到「行业板块」Tab。
+function loadOverviewAll() {
+  return Promise.allSettled([
+    loadIndices(), loadDistribution(), loadMovers(),
+    loadTurnover(), loadLimitPool(), loadSectorFlow(), loadHsgt(),
+    loadMargin(), loadFlash(),
+  ])
 }
 
 // ── Tab switching ─────────────────────────────────────────────
@@ -669,41 +489,22 @@ async function loadAISummary(sym) {
 async function switchTab(t) {
   tab.value = t
   if (t === 'overview' && !indices.value.length) {
-    await Promise.allSettled([loadIndices(), loadBreadth(), loadMovers(), loadSectorMini()])
-  }
-  if (t === 'sector' && !industryBoards.value.length) {
-    await loadBoards('industry')
-  }
-  if (t === 'news' && !marketItems.value.length) {
-    await Promise.allSettled([loadSentiment(), loadMarket()])
-    newsTimer = setInterval(() => { loadSentiment(); loadMarket() }, 120000)
+    await loadOverviewAll()
   }
 }
 
 function refreshCurrent() {
   if (tab.value === 'overview') {
-    indices.value = []; breadth.value = null; topMovers.value = []; sectorMini.value = []
-    Promise.allSettled([loadIndices(), loadBreadth(), loadMovers(), loadSectorMini()])
-  } else if (tab.value === 'sector') {
-    if (sectorTab.value === 'flow') loadFlow()
-    else {
-      if (sectorTab.value === 'industry') { industryBoards.value = []; loadBoards('industry') }
-      else { conceptBoards.value = []; loadBoards('concept') }
-    }
-  } else if (tab.value === 'news') {
-    loadSentiment(); loadMarket()
+    indices.value = []; breadth.value = null; distribution.value = null
+    topMovers.value = []; turnover.value = null
+    limitPool.value = null; sectorFlow.value = []; hsgt.value = null
+    loadOverviewAll()
   }
 }
 
-// Navigate to sector tab and select a board
-function goSector(name) {
+// 行业资金流点击板块 → 切到「行业板块」Tab(详尽热力图/汇总表/成分股下钻在那里)
+function goSector() {
   tab.value = 'sector'
-  sectorTab.value = 'industry'
-  if (!industryBoards.value.length) {
-    loadBoards('industry').then(() => selectBoard(name))
-  } else {
-    selectBoard(name)
-  }
 }
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -725,37 +526,18 @@ function fmtVol(v) {
   return v.toString()
 }
 
-function tileOpacity(pct) {
-  const abs = Math.min(Math.abs(pct ?? 0), 6)
-  return 0.3 + (abs / 6) * 0.7
-}
-
-function pctColor(pct) {
-  if (pct == null) return '#334155'
-  if (pct >= 5)  return '#b91c1c'
-  if (pct >= 3)  return '#dc2626'
-  if (pct >= 1)  return '#ef4444'
-  if (pct >= 0)  return '#f87171'
-  if (pct >= -1) return '#4ade80'
-  if (pct >= -3) return '#22c55e'
-  if (pct >= -5) return '#16a34a'
-  return '#166534'
-}
-
 // ── Init ──────────────────────────────────────────────────────
 
 onMounted(async () => {
-  // Check if we should start on a specific tab from query params
+  // 深链:?tab=sector 或 ?sector=* → 行业板块;否则大盘行情
   const initTab = route.query.tab
-  if (initTab === 'sector' || initTab === 'news') {
-    await switchTab(initTab)
+  if (initTab === 'crowding') {
+    tab.value = 'crowding'
+  } else if (initTab === 'sector' || route.query.sector) {
+    tab.value = 'sector'
   } else {
-    await Promise.allSettled([loadIndices(), loadBreadth(), loadMovers(), loadSectorMini()])
+    await loadOverviewAll()
   }
-})
-
-onUnmounted(() => {
-  if (newsTimer) clearInterval(newsTimer)
 })
 </script>
 
@@ -766,7 +548,7 @@ onUnmounted(() => {
 .hub-tabs { display: flex; align-items: center; gap: 3px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 3px; align-self: flex-start; width: 100%; }
 .hub-tab { display: flex; align-items: center; gap: 6px; padding: 7px 16px; border-radius: calc(var(--radius-md) - 2px); background: transparent; border: none; color: var(--text-3); font-size: 13px; cursor: pointer; transition: all 0.15s; }
 .hub-tab:hover { color: var(--text-1); }
-.hub-tab.active { background: var(--bg-elevated); color: var(--text-1); box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+.hub-tab.active { background: var(--bg-elevated); color: var(--text-1); box-shadow: 0 1px 3px rgba(15,23,42,0.12); }
 .tab-spacer { flex: 1; }
 .btn-refresh { display: flex; align-items: center; gap: 5px; padding: 6px 12px; border-radius: var(--radius-md); border: 1px solid var(--border); background: transparent; color: var(--text-2); font-size: 12px; cursor: pointer; }
 .btn-refresh:hover { border-color: var(--accent); color: var(--accent); }
@@ -781,7 +563,7 @@ onUnmounted(() => {
 .panel-loading { font-size: 12px; color: var(--text-3); padding: 16px 0; text-align: center; display: flex; align-items: center; justify-content: center; gap: 6px; }
 .panel-empty { font-size: 12px; color: var(--text-3); padding: 20px 0; text-align: center; }
 .chart-panel { padding: 14px; }
-.error-box { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); color: #f87171; border-radius: var(--radius-md); padding: 10px 14px; font-size: 13px; }
+.error-box { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); color: #dc2626; border-radius: var(--radius-md); padding: 10px 14px; font-size: 13px; }
 
 /* ── Index row ── */
 .index-row { display: flex; gap: 12px; flex-wrap: wrap; }
@@ -792,8 +574,8 @@ onUnmounted(() => {
 .idx-price { font-size: 22px; font-weight: 700; color: var(--text-1); }
 .idx-change { display: flex; align-items: baseline; gap: 6px; margin-top: 4px; }
 .idx-pct { font-size: 14px; font-weight: 700; }
-.idx-pct.up   { color: #ef4444; }
-.idx-pct.down { color: #22c55e; }
+.idx-pct.up   { color: #dc2626; }
+.idx-pct.down { color: #16a34a; }
 .idx-abs { font-size: 12px; color: var(--text-3); }
 .idx-vol { font-size: 11px; color: var(--text-3); margin-top: 6px; }
 .idx-empty { display: flex; align-items: center; justify-content: center; font-size: 12px; color: var(--text-3); }
@@ -802,23 +584,71 @@ onUnmounted(() => {
 .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 @media (max-width: 860px) { .two-col { grid-template-columns: 1fr; } }
 
+/* ── Pulse bar (顶部量能/情绪条) ── */
+.pulse-bar { display: flex; align-items: stretch; gap: 0; padding: 12px 4px; flex-wrap: wrap; }
+.pulse-item { display: flex; flex-direction: column; gap: 3px; padding: 0 18px; justify-content: center; min-width: 96px; }
+.pulse-hsgt { align-items: flex-end; }
+.pulse-lbl { font-size: 11px; color: var(--text-3); }
+.pulse-val { font-size: 19px; font-weight: 700; color: var(--text-1); line-height: 1.1; }
+.pulse-val small { font-size: 11px; font-weight: 500; color: var(--text-3); margin-left: 2px; }
+.pulse-val.muted { color: var(--text-3); }
+.pulse-val.accent-num { color: var(--accent); }
+.pulse-sub { font-size: 11px; color: var(--text-3); }
+.pulse-sep { width: 1px; background: var(--border); margin: 4px 0; }
+.pulse-grow { flex: 1; }
+
+/* ── Distribution histogram ── */
+.dist-body { display: flex; flex-direction: column; gap: 14px; }
+.dist-chart { display: flex; align-items: flex-end; gap: 3px; height: 132px; padding-top: 14px; }
+.dist-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 3px; height: 100%; position: relative; }
+.dist-cnt { font-size: 9px; color: var(--text-3); line-height: 1; }
+.dist-bar { width: 100%; border-radius: 2px 2px 0 0; min-height: 2px; transition: height 0.3s; }
+.dist-bar.up   { background: #dc2626; }
+.dist-bar.down { background: #16a34a; }
+.dist-bar.flat { background: var(--text-3); }
+.dist-lbl { font-size: 8.5px; color: var(--text-3); white-space: nowrap; transform: scale(0.92); }
+
+/* ── 连板梯队 ── */
+.ladder-body { display: flex; flex-direction: column; gap: 10px; }
+.ladder-row { display: flex; gap: 10px; align-items: flex-start; }
+.ladder-tag { flex-shrink: 0; min-width: 52px; text-align: center; font-size: 12px; font-weight: 700; padding: 4px 8px; border-radius: var(--radius-sm); }
+.ladder-tag.lb-hot  { background: #dc2626; color: #fff; }
+.ladder-tag.lb-warm { background: rgba(239,68,68,0.18); color: #dc2626; }
+.ladder-tag.lb-base { background: var(--bg-hover); color: var(--text-2); }
+.ladder-n { font-size: 10px; font-weight: 500; margin-left: 3px; opacity: 0.85; }
+.ladder-stocks { display: flex; flex-wrap: wrap; gap: 5px; flex: 1; }
+.ladder-chip { font-size: 12px; padding: 3px 9px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 12px; color: var(--text-1); text-decoration: none; transition: all 0.12s; }
+.ladder-chip:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── 行业资金流 ── */
+.flow-list { display: flex; flex-direction: column; gap: 1px; }
+.flow-row { display: flex; align-items: center; justify-content: space-between; padding: 7px 8px; border-radius: var(--radius-sm); cursor: pointer; }
+.flow-row:hover { background: var(--bg-hover); }
+.flow-name { font-size: 13px; color: var(--text-1); font-weight: 500; }
+.flow-meta { display: flex; align-items: center; gap: 14px; }
+.flow-chg { font-size: 12px; font-weight: 600; min-width: 56px; text-align: right; }
+.flow-amt { font-size: 13px; font-weight: 700; font-family: var(--font-mono); min-width: 66px; text-align: right; }
+.flow-chg.up, .flow-amt.up { color: #dc2626; }
+.flow-chg.down, .flow-amt.down { color: #16a34a; }
+.muted { color: var(--text-3); }
+
 /* ── Breadth ── */
 .breadth-body { display: flex; flex-direction: column; gap: 14px; }
 .breadth-bar-wrap { display: flex; flex-direction: column; gap: 8px; }
 .breadth-bar { display: flex; height: 10px; border-radius: 5px; overflow: hidden; gap: 2px; }
 .seg { min-width: 4px; }
-.seg-up   { background: #ef4444; }
+.seg-up   { background: #dc2626; }
 .seg-flat { background: var(--border); }
-.seg-down { background: #22c55e; }
+.seg-down { background: #16a34a; }
 .breadth-leg { display: flex; gap: 12px; font-size: 11px; }
-.leg-up   { color: #ef4444; }
+.leg-up   { color: #dc2626; }
 .leg-flat { color: var(--text-3); }
-.leg-down { color: #22c55e; }
+.leg-down { color: #16a34a; }
 .breadth-stats { display: flex; gap: 20px; }
 .bstat { text-align: center; }
 .bstat-val { font-size: 20px; font-weight: 700; color: var(--text-1); }
-.bstat-val.up   { color: #ef4444; }
-.bstat-val.down { color: #22c55e; }
+.bstat-val.up   { color: #dc2626; }
+.bstat-val.down { color: #16a34a; }
 .bstat-lbl { font-size: 11px; color: var(--text-3); margin-top: 2px; }
 
 /* ── Movers ── */
@@ -829,29 +659,26 @@ onUnmounted(() => {
 .mover-row { display: flex; align-items: center; gap: 8px; padding: 6px 6px; border-radius: var(--radius-sm); }
 .mover-row:hover { background: var(--bg-hover); }
 .mover-stock { flex: 1; }
-.mover-name { font-size: 13px; font-weight: 500; color: var(--text-1); text-decoration: none; }
+.mover-name { font-size: 13px; font-weight: 500; color: var(--text-1); text-decoration: none; cursor: pointer; }
 .mover-name:hover { color: var(--accent); }
 .mover-code { font-size: 10px; color: var(--text-3); margin-left: 4px; }
 .mover-price { font-size: 13px; color: var(--text-2); font-family: var(--font-mono); min-width: 54px; text-align: right; }
 .mover-pct { font-size: 13px; font-weight: 700; min-width: 58px; text-align: right; }
-.mover-pct.up   { color: #ef4444; }
-.mover-pct.down { color: #22c55e; }
+.mover-pct.up   { color: #dc2626; }
+.mover-pct.down { color: #16a34a; }
 
 /* ── Sector mini tiles ── */
-.sector-tiles { display: flex; flex-wrap: wrap; gap: 7px; }
-.stile { padding: 7px 11px; border-radius: var(--radius-md); min-width: 78px; display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; transition: transform 0.1s; }
-.stile:hover { transform: scale(1.04); }
-.stile.up   { background: rgba(239,68,68,0.15); }
-.stile.down { background: rgba(34,197,94,0.15); }
-.stile-name { font-size: 11px; color: var(--text-1); white-space: nowrap; }
-.stile-pct  { font-size: 12px; font-weight: 700; }
-.stile.up   .stile-pct { color: #ef4444; }
-.stile.down .stile-pct { color: #22c55e; }
+/* ── 板块区头部(标题 + 行业/概念切换)── */
+.sect-header { display: flex; align-items: center; gap: 14px; margin-top: 4px; }
+.sect-h-title { font-size: 15px; font-weight: 700; color: var(--text-1); }
+.sect-title-l { display: flex; align-items: center; gap: 12px; }
+.inline-sub { padding: 2px; }
+.inline-sub .sub-tab { padding: 3px 11px; font-size: 11px; }
 
 /* ── Sub-tabs ── */
 .sub-tabs { display: flex; gap: 4px; background: var(--bg-hover); border-radius: 8px; padding: 3px; align-self: flex-start; }
 .sub-tab { padding: 5px 14px; border-radius: 6px; border: none; background: transparent; color: var(--text-2); font-size: 12px; font-weight: 500; cursor: pointer; transition: all 0.15s; }
-.sub-tab.active { background: var(--bg-surface); color: var(--accent); box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+.sub-tab.active { background: var(--bg-surface); color: var(--accent); box-shadow: 0 1px 3px rgba(15,23,42,0.12); }
 
 /* ── Board layout ── */
 .board-controls { display: flex; align-items: center; gap: 12px; padding: 10px 14px; flex-wrap: wrap; }
@@ -868,7 +695,8 @@ onUnmounted(() => {
 .board-row { padding: 10px 14px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.1s; }
 .board-row:last-child { border-bottom: none; }
 .board-row:hover { background: var(--bg-hover); }
-.board-row.selected { background: var(--accent-dim); border-left: 3px solid var(--accent); padding-left: 11px; }
+.board-row.selected { background: var(--accent-dim); }
+.board-row.selected .board-name { color: var(--accent); }
 .board-row-main { display: flex; align-items: center; justify-content: space-between; margin-bottom: 3px; }
 .board-name { font-size: 13px; font-weight: 600; color: var(--text-1); }
 .board-chg { font-size: 13px; font-weight: 700; font-family: var(--font-mono); }
@@ -879,72 +707,12 @@ onUnmounted(() => {
 .empty-stocks { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 48px; text-align: center; }
 .stocks-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; }
 .stocks-table-wrap { overflow-x: auto; max-height: 460px; overflow-y: auto; padding: 0; }
-.action-link { font-size: 11px; padding: 2px 8px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-3); text-decoration: none; white-space: nowrap; }
+.action-link { font-size: 11px; padding: 2px 8px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-3); text-decoration: none; white-space: nowrap; cursor: pointer; }
 .action-link:hover { border-color: var(--accent); color: var(--accent); }
 
-/* ── Fund flow ── */
-.flow-header-row { display: flex; align-items: center; gap: 14px; padding: 10px 14px; flex-wrap: wrap; }
-.ind-chips { display: flex; gap: 4px; }
-.ind-chip { font-size: 12px; padding: 4px 12px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 20px; color: var(--text-2); cursor: pointer; transition: all 0.12s; }
-.ind-chip.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); font-weight: 600; }
-.flow-charts { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-.row-in  { background: rgba(239,68,68,0.03); }
-.row-out { background: rgba(34,197,94,0.03); }
-.table-wrap { max-height: 480px; overflow-y: auto; }
-
-/* ── News ── */
-.sentiment-bar { display: flex; align-items: center; gap: 16px; padding: 10px 16px; flex-wrap: wrap; }
-.sent-group { display: flex; align-items: center; gap: 10px; }
-.sent-label { font-size: 11px; color: var(--text-3); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
-.sent-score { font-size: 14px; font-weight: 700; }
-.sent-score.pos { color: var(--success); }
-.sent-score.neg { color: var(--danger); }
-.sent-score.neu { color: var(--text-2); }
-.sent-detail { display: flex; gap: 8px; font-size: 12px; }
-.sent-detail .pos { color: var(--success); }
-.sent-detail .neg { color: var(--danger); }
-.sent-detail .neu { color: var(--text-3); }
-.sent-headlines { display: flex; gap: 6px; flex-wrap: wrap; flex: 1; }
-.h-chip { font-size: 11px; color: var(--text-2); background: var(--bg-elevated); padding: 2px 8px; border-radius: 10px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sent-time { margin-left: auto; font-size: 11px; white-space: nowrap; }
-
-.news-layout { display: grid; grid-template-columns: 1fr 360px; gap: 14px; align-items: start; }
-@media (max-width: 900px) { .news-layout { grid-template-columns: 1fr; } }
-.col-main { display: flex; flex-direction: column; gap: 10px; }
-.col-side { display: flex; flex-direction: column; gap: 10px; }
-.col-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; gap: 8px; }
-.col-title { font-size: 13px; font-weight: 600; color: var(--text-1); }
-.col-actions { display: flex; gap: 6px; }
-.stock-search { display: flex; gap: 5px; align-items: center; }
-.input-sm { width: 110px; padding: 4px 8px; font-size: 12px; }
-.btn-sm { padding: 4px 10px; font-size: 12px; }
-
-.news-list { overflow: hidden; padding: 0; }
-.list-header { padding: 8px 14px 6px; border-bottom: 1px solid var(--border); font-size: 12px; }
-.news-item { padding: 9px 14px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.1s; }
-.news-item:last-child { border-bottom: none; }
-.news-item:hover { background: var(--bg-hover); }
-.ni-row { display: flex; align-items: flex-start; gap: 7px; }
-.ni-title { font-size: 13px; color: var(--text-1); line-height: 1.4; flex: 1; }
-.ni-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex-shrink: 0; }
-.ni-source { font-size: 10px; color: var(--text-3); }
-.ni-time { font-size: 11px; color: var(--text-3); white-space: nowrap; font-family: var(--font-mono); }
-.ni-content { font-size: 12px; color: var(--text-2); line-height: 1.6; margin-top: 6px; padding-left: 14px; border-left: 2px solid var(--border); }
-.sdot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; margin-top: 4px; }
-.sdot.positive { background: var(--success); }
-.sdot.negative { background: var(--danger); }
-.sdot.neutral  { background: var(--text-3); }
-
-.ai-panel { padding: 12px 14px; border-left: 3px solid #8b5cf6; }
-.ai-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
-.ai-tag { font-size: 11px; font-weight: 700; color: #a78bfa; background: #8b5cf618; padding: 2px 7px; border-radius: 4px; }
-.ai-body { font-size: 13px; color: var(--text-1); line-height: 1.7; white-space: pre-wrap; margin: 0; }
-.empty-card { padding: 24px; text-align: center; }
-.tiny { font-size: 11px; }
-
 /* ── Shared ── */
-.up   { color: #f87171; }
-.down { color: #4ade80; }
+.up   { color: #dc2626; }
+.down { color: #16a34a; }
 .pos  { color: var(--success); }
 .neg  { color: var(--danger); }
 .fw-600 { font-weight: 600; }
@@ -963,19 +731,43 @@ onUnmounted(() => {
 .data-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); color: var(--text-1); }
 .data-table tr:last-child td { border-bottom: none; }
 
+/* 两市两融 + 增量快讯（首页「市场资讯」并入） */
+.margin-hero { display: flex; flex-direction: column; gap: 3px; padding: 12px 14px 10px; }
+.mh-label { font-size: 11px; color: var(--text-2); }
+.mh-value { font-size: 23px; font-weight: 700; color: var(--accent); letter-spacing: -0.5px; }
+.mh-sub { font-size: 11px; color: var(--text-3); }
+.margin-trend { padding: 0 14px 12px; }
+.mt-svg { width: 100%; height: 56px; display: block; }
+.mt-line { fill: none; stroke: var(--up); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.mt-line.down { stroke: var(--down); }
+.mt-area { fill: var(--up); opacity: 0.10; stroke: none; }
+.mt-area.down { fill: var(--down); }
+.mt-foot { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--text-3); margin-top: 2px; }
+.mt-chg { font-weight: 600; font-variant-numeric: tabular-nums; }
+.flash-list { display: flex; flex-direction: column; }
+.flash-row { display: flex; gap: 10px; padding: 9px 14px; text-decoration: none; color: var(--text-1); border-bottom: 1px solid var(--border); transition: background 0.12s; }
+.flash-row:last-child { border-bottom: none; }
+.flash-row:hover { background: var(--bg-hover); }
+.flash-time { font-size: 11px; color: var(--text-3); flex-shrink: 0; padding-top: 1px; width: 38px; }
+.flash-title { font-size: 12.5px; line-height: 1.5; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+
 @media (max-width: 768px) {
   .market-hub { padding: 10px 12px; }
   .hub-tabs { overflow-x: auto; flex-wrap: nowrap; }
   .hub-tab { white-space: nowrap; flex-shrink: 0; padding: 7px 12px; }
   .two-col { grid-template-columns: 1fr; }
-  .flow-charts { grid-template-columns: 1fr; }
   .board-layout { grid-template-columns: 1fr; }
   .board-controls { padding: 8px 10px; gap: 8px; }
   .board-search-wrap { flex: 1; }
   .index-row { gap: 8px; }
-  .sector-tiles { gap: 5px; }
-  .stile { min-width: 68px; padding: 5px 8px; }
-  .sentiment-bar { padding: 8px 10px; gap: 10px; }
   .data-table { min-width: 520px; }
+  /* pulse-bar：窄屏横向滚动，避免多行堆叠 */
+  .pulse-bar { overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; padding: 10px 12px; gap: 0; }
+  .pulse-item { flex-shrink: 0; padding: 0 14px; }
+  .pulse-sep { flex-shrink: 0; }
+  .pulse-grow { display: none; }
+  /* 指数卡窄屏横向滚动 */
+  .index-row { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .index-card { min-width: 130px; flex-shrink: 0; }
 }
 </style>
